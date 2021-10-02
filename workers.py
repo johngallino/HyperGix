@@ -2,8 +2,11 @@ import requests
 import json
 import config
 import ast
+import shutil
+import os
 from os import getcwd
 from functions import unzipIt
+from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
@@ -23,18 +26,56 @@ class Downloader(qtc.QObject):
     def downloadHSI(self):
         print('Downloading to:', getcwd())
         r = requests.get(self.url)
-        filename = self.id + '.zip'
-        with open(filename, 'wb') as f:
+        self.filename = self.id + '.zip'
+        with open(self.filename, 'wb') as f:
             f.write(r.content)
 
         print(f'Download of {self.id} finished')
         self.fileDownloaded.emit(f'Download of {self.id} finished')
 
         try:
-            unzipIt(filename)
+            unzipIt(self.filename)
             self.fileUnzipped.emit(self.id[:22])
         except:
             print('Error unzipping file %s.zip' % self.id)
+
+        try:
+            self.headerFix()
+        except:
+            print('Error making fix to header file')
+
+    def headerFix(self):
+        old_header = os.path.join(DOWNLOAD_PATH, self.filename[:-11], f'{self.filename[:-11]}.bak')
+        header = os.path.join(DOWNLOAD_PATH, self.filename[:-11], f'{self.filename[:-11]}.hdr')
+
+        # Making a new copy of header with adjusted offset of 2502
+        os.rename(header, old_header)
+        shutil.copyfile(old_header, header)
+
+        file = open(header, 'r')
+        replacement = ""
+        for line in file:
+            line = line.strip()
+            changes = line.replace("header offset = 0", "header offset = 2502")
+            replacement = replacement + changes + "\n"
+        file.close()
+
+        fout = open(header, 'w')
+        fout.write(replacement)
+        fout.close()
+
+    def deleteExtraFiles(self):
+        ''' A function to keep only the .L1R and header files and delete everything else'''
+        for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
+            for name in files:
+                if name[-3:] != 'L1R' and name[-3:] != 'hdr':
+                    try:
+                        os.remove(name)
+                    except:
+                        print(f"Error trying to delete {name}")
+
+        
+
 
 class LogIner(qtc.QObject):
     """ An object to control logging into USGS server """
