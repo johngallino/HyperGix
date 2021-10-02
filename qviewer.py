@@ -22,24 +22,21 @@ from functions import tifCruncher
 
 gdal.UseExceptions()
 
-class MplCanvas(FigureCanvasQTAgg):
+class NavigationToolbar(NavigationToolbar2QT):
+    # only display the buttons we need
+    toolitems = [t for t in NavigationToolbar2QT.toolitems if
+                 t[0] in ('Home', 'Back', 'Forward', 'Pan', 'Zoom', 'Save')]
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
-        fig = plt.figure(figsize=(width, height), dpi=dpi, tight_layout=True)
-        self.axes = fig.add_subplot(111)
-        super(MplCanvas, self).__init__(fig)
 
 class qViewer(qtw.QWidget):
     """ A class for the Image Viewer GUI panel """
 
-    converting = qtc.pyqtSignal()
-    convertDone = qtc.pyqtSignal()
 
     def openTiffFromList(self, item):
         """ Processes and opens a GeoTiff image in the viewer """
         # plt.clf()
         plt.cla()
-        print(plt.get_fignums())
+        
         # Raster image
         filename = item.text() + '.L1R'
         filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], filename)
@@ -48,29 +45,28 @@ class qViewer(qtw.QWidget):
         h_filename = item.text() + '.hdr'
         h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
 
-        # self.converting.emit()
-
         img = envi.open(h_filepath, filepath)
+        desc = gdal.Info(filepath)
+        desc = desc.split('Corner Coordinates')[0]
+        # print('\n'+desc)
         
-        # self.convertDone.emit()
-       
+        
         self.properties_text.setText(str(img).replace('\t', ''))
+        self.properties_text.append(desc)
         self.view = s.ImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
-        # self.v_ax.imshow(img, (4, 3, 1),figsize=(10,10), stretch=((.01, .99), (.01, .99), (.01, .98)))
-        # self.view = s.imshow(img, (4, 3, 1), fignum=1)
         self.view.spectrum_plot_fig_id = 2
         self.view.show(mode='data', fignum=1)
         
         
-        self.v_canvas.draw()
-        self.v_canvas2.draw()
+        self.v_imageCanvas.draw()
+        self.v_spectraCanvas.draw()
 
     def __init__(self, *args, **kwargs):
         super().__init__()
 
         self.layout = qtw.QHBoxLayout()
         self.setLayout(self.layout)
-        print(dir(ImageView))
+        
         # Internal variables
         self.downloads = []
         self.readable_files = {}
@@ -88,9 +84,16 @@ class qViewer(qtw.QWidget):
         self.open_btn = qtw.QPushButton("Import GeoTiff")
         self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
 
+        self.properties_label = qtw.QLabel("File Properties")
+        self.properties_text = qtw.QTextBrowser()
+        self.properties_text.setFixedWidth(230)
+        self.properties_text.setFixedHeight(150)
+        
         self.leftFrame.addWidget(self.dl_label)
         self.leftFrame.addWidget(self.downloadList)
-        self.leftFrame.addWidget(self.open_btn)
+        self.leftFrame.addWidget(self.open_btn, )
+        self.leftFrame.addWidget(self.properties_label)
+        self.leftFrame.addWidget(self.properties_text)
 
         self.layout.addLayout(self.leftFrame)
 
@@ -134,41 +137,52 @@ class qViewer(qtw.QWidget):
         # Mid frame
         self.v_midframe = qtw.QWidget()
         self.v_midframe.setLayout(qtw.QVBoxLayout())
+
+        self.v_imageFrame = qtw.QWidget()
+        self.v_imageFrame.setLayout(qtw.QVBoxLayout())
+
+        self.splitter = qtw.QSplitter()
+
+        self.subLayout = qtw.QWidget()
+        self.subLayout.setLayout(qtw.QVBoxLayout())
+
+        self.subLayout2 = qtw.QWidget()
+        self.subLayout2.setLayout(qtw.QVBoxLayout())
+       
+        self.v_fig = plt.figure(figsize=(1,5))
+        self.s_fig = plt.figure(figsize=(6,5))
+
+        self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
+        self.v_spectraCanvas = FigureCanvasQTAgg(self.s_fig)
+        self.v_canvas_nav = NavigationToolbar(self.v_imageCanvas, self.v_midframe)
+
+        self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
+        self.ax1.set_axis_off()
+        self.v_fig.add_axes(self.ax1)
+        self.s_fig.suptitle('Pixel Spectra', fontsize=10)
+
+        self.pixelButtons = qtw.QWidget()
+        self.pixelButtons.setLayout(qtw.QHBoxLayout())
+
+        self.v_midframe.layout().addWidget(self.v_imageFrame)
+        self.v_imageFrame.layout().addWidget(self.splitter)
         self.layout.addWidget(self.v_midframe)
-
-        self.v_fig = plt.figure(figsize=(12,4), tight_layout=True)
-        self.s_fig = plt.figure(figsize=(3,4), tight_layout=True)
-        # self.s_fig.set(gcf,'Position', get(gcf,'Position') + [0,0,150,0])
-        # self.v_fig, self.s_fig = plt.subplots(nrows=1, ncols=2, figsize=(12,4))
-        self.v_canvas = FigureCanvasQTAgg(self.v_fig)
-        self.v_canvas2 = FigureCanvasQTAgg(self.s_fig)
-        # self.v_canvas = MplCanvas(self)
-        self.v_canvas.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
-        self.v_canvas_nav = NavigationToolbar2QT(self.v_canvas, self.v_midframe)
+        self.subLayout.layout().addWidget(self.v_canvas_nav)
+        self.subLayout.layout().addWidget(self.v_imageCanvas)
+        self.subLayout2.layout().addWidget(self.v_spectraCanvas)
+        self.subLayout2.layout().addWidget(self.pixelButtons)
+        self.splitter.addWidget(self.subLayout)
+        self.splitter.addWidget(self.subLayout2)
         
-        self.v_midframe.layout().addWidget(self.v_canvas)
-        self.v_midframe.layout().addWidget(self.v_canvas_nav)
-        self.v_midframe.layout().addWidget(self.v_canvas2)
-        self.v_canvas.draw()
-        self.v_canvas2.draw()
-
-        # def do_zoom(event):
-        #     factor = 1.001 ** event.delta
-        #     self.v_canvas_widget.scale(tk.ALL, event.x, event.y, factor, factor/2)
-
-        # Right frame
-        self.rightFrame = qtw.QVBoxLayout()
-        self.layout.addLayout(self.rightFrame)
-
-        self.properties_label = qtw.QLabel("File Properties")
-        self.properties_text = qtw.QTextBrowser()
-        self.properties_text.setFixedWidth(230)
-        self.properties_text.setFixedHeight(150)
+        self.clearPlot_btn = qtw.QPushButton("Clear Plot")
+        self.clearPlot_btn.clicked.connect(plt.cla)
+        self.addPixel_btn = qtw.QPushButton("Add Pixel to Profile")
         
 
-        self.rightFrame.addStretch()
-        self.rightFrame.addWidget(self.properties_label)
-        self.rightFrame.addWidget(self.properties_text)
-        self.rightFrame.addStretch()
+        self.pixelButtons.layout().addWidget(self.clearPlot_btn)
+        self.pixelButtons.layout().addWidget(self.addPixel_btn)
+
+        self.v_imageCanvas.draw()
+        self.v_spectraCanvas.draw()
+
         
-        # self.v_canvas.mouseDoubleClickEvent.connect

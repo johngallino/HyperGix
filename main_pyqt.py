@@ -79,8 +79,6 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab1.resultsLoaded.connect(self.status_bar.showMessage)
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
     
-        self.mainNotebook.tab3.converting.connect(lambda: self.status_bar.showMessage('Converting file format, please wait...'))
-        self.mainNotebook.tab3.convertDone.connect(lambda: self.status_bar.showMessage('File conversion done.'))
 
         
 

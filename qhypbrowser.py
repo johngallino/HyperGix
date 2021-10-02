@@ -123,16 +123,13 @@ class QHypbrowser(qtw.QWidget):
         # self.searchBoxLayout.addWidget(self.testbtn)
 
         self.prev_btn = qtw.QPushButton("<<", clicked=lambda:self.showResults('back'))
-       
         self.prev_btn.hide()
-        # self.searchBoxLayout.addWidget(self.prev_btn)
+        
         self.next_btn = qtw.QPushButton(">>", clicked=lambda:self.showResults('next'))
         self.next_btn.hide()
-        # self.searchBoxLayout.addWidget(self.next_btn)
         
         
         self.GridLayout = qtw.QGridLayout()
-        # self.layout.addLayout(self.GridLayout)
 
         self.splitter = qtw.QSplitter()
         
