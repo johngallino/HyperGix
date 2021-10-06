@@ -35,7 +35,8 @@ class qViewer(qtw.QWidget):
     def openTiffFromList(self, item):
         """ Processes and opens a GeoTiff image in the viewer """
         # plt.clf()
-        plt.cla()
+        # self.s_fig.cla()
+        self.v_fig.clf()
         
         # Raster image
         filename = item.text() + '.L1R'
@@ -47,7 +48,7 @@ class qViewer(qtw.QWidget):
 
         img = envi.open(h_filepath, filepath)
         desc = gdal.Info(filepath)
-        desc = desc.split('Corner Coordinates')[0]
+        # desc = desc.split('Corner Coordinates')[0]
         # print('\n'+desc)
         
         

@@ -7,6 +7,7 @@ from qviewer import qViewer
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
+from PyQt5 import QtSql as qts
 
 import sys
 
@@ -41,6 +42,7 @@ class MyWindow(qtw.QMainWindow):
         self.setGeometry(100, 100, 1300, 900) #top, left, width, height
         self.version = '0.1'
         self.setWindowTitle('HyperGix Hyperspectral Software ' + self.version)
+        self.db = qts.QSqlDatabase.addDatabase('QSQLITE')
         self.initUI()
 
         if config.apiKey:

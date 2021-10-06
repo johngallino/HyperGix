@@ -28,8 +28,15 @@ class Pixel:
 
 class Profile:
     """ A spectral profile """
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, nickname):
+        self.id = ''
+        self.rows = ''
+        self.samples = '' # columns
+        self.bands = '' # number of bands
+        self.sensor = ''
+        self.interleave = ''
+        self.nickname = nickname
+       
         self.pixels = []
         self.avgSpectra = []
 
@@ -37,7 +44,7 @@ class Profile:
         self.pixels.append(pixel)
 
     def delPixel(self, i):
-        del self.pixels[i]
+        self.pixels.pop(i)
 
     def showValues(self):
         print(self.pixels)
@@ -100,7 +107,26 @@ class qProfileManager(qtw.QFrame):
         self.plot1.set_title('All Saved Spectral Profiles')
         
         self.canvas.draw()
-            
+
+    def profilePop(self):
+        """ Pops up a modal window for creating a new profile """
+        self.profilePop = qtw.QDialog()
+        self.profilePop.move(500,500)
+        self.profilePop.setWindowTitle('Create A New Profile')
+        self.profilePop.setLayout(qtw.QFormLayout())
+        
+        p_name = qtw.QLineEdit()
+
+        self.profilePop.layout().addRow(qtw.QLabel("New Material Profile"))
+        self.profilePop.layout().addRow('Profile Name:', p_name)
+        
+        self.profilePop.layout().addRow(qtw.QPushButton("Create Profile", clicked=lambda: self.createProfile(p_name.text())))
+        self.profilePop.show()
+
+    def createProfile(self, name):
+        self.profilePop.hide()
+        self.profileList.addItem(name)
+        print(f'{name} profile created! But not really.')
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -119,9 +145,12 @@ class qProfileManager(qtw.QFrame):
         self.profileList.setFixedWidth(180)
         self.profileList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
         self.layout.addWidget(self.profileList, 1, 0)
+
+        self.addProfileButton = qtw.QPushButton("Create New Profile", clicked=self.profilePop)
+        self.layout.addWidget(self.addProfileButton, 2, 0)
         
         self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
-        self.layout.addWidget(self.plotAllButton, 2, 0)
+        self.layout.addWidget(self.plotAllButton, 3, 0)
 
         for profile in self.profiles:
             self.profileList.addItem(profile.name)
@@ -140,7 +169,7 @@ class qProfileManager(qtw.QFrame):
         self.pixelWindow.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
         self.pixelWindow.setFrameShape(qtw.QFrame.Box)
         self.pixelWindow.setLayout(qtw.QVBoxLayout())
-        self.layout.addWidget(self.pixelWindow, 1, 1, 2, 3)
+        self.layout.addWidget(self.pixelWindow, 1, 1, 3, 3)
 
         self.setLayout(self.layout)
 
