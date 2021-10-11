@@ -64,15 +64,15 @@ class Downloader(qtc.QObject):
         fout.write(replacement)
         fout.close()
 
-    def deleteExtraFiles(self):
-        ''' A function to keep only the .L1R and header files and delete everything else'''
-        for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
-            for name in files:
-                if name[-3:] != 'L1R' and name[-3:] != 'hdr':
-                    try:
-                        os.remove(name)
-                    except:
-                        print(f"Error trying to delete {name}")
+    # def deleteExtraFiles(self):
+    #     ''' A function to keep only the .L1R and header files and delete everything else'''
+    #     for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
+    #         for name in files:
+    #             if name[-3:] != 'L1R' and name[-3:] != 'hdr':
+    #                 try:
+    #                     os.remove(name)
+    #                 except:
+    #                     print(f"Error trying to delete {name}")
 
         
 

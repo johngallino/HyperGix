@@ -18,6 +18,7 @@ class ResultBox(qtw.QFrame):
     downloadStartedA = qtc.pyqtSignal(str)
     downloadFinishedA = qtc.pyqtSignal(str)
     downloadUnzippedA = qtc.pyqtSignal(str)
+    nicknameChosen = qtc.pyqtSignal(str, str)
 
     def beginDownload(self, id, url):
 
@@ -32,6 +33,13 @@ class ResultBox(qtw.QFrame):
                 self.downloader.fileDownloaded.connect(self.downloadFinishedA)
                 self.downloader.fileUnzipped.connect(self.downloadUnzippedA)
                 self.downloadThread.start()
+
+                nickname, ok = qtw.QInputDialog.getText(self, 'Enter a Nickname', 'Would you like to enter a nickname for this file for easier reference?:')
+        
+                if ok:
+                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(id[:22], nickname))
+                else:
+                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(id[:22], 'None'))
                 
     
         self.confirmPop = qtw.QMessageBox()
@@ -40,6 +48,10 @@ class ResultBox(qtw.QFrame):
         self.confirmPop.setStandardButtons(qtw.QMessageBox.Yes | qtw.QMessageBox.Cancel)
         self.confirmPop.buttonClicked.connect(confirm)
         self.confirmPop.show()
+
+        
+         
+
 
     def __init__(self, imageLabel, id, caption, count):
         super().__init__()
@@ -73,6 +85,7 @@ class QHypbrowser(qtw.QWidget):
     downloadStartedB = qtc.pyqtSignal(str)
     downloadFinishedB = qtc.pyqtSignal(str)
     downloadUnzippedB = qtc.pyqtSignal(str)
+    nicknameChosenB = qtc.pyqtSignal(str, str)
 
     def __init__(self, parent):
         super(qtw.QWidget, self).__init__(parent)
@@ -334,6 +347,7 @@ class QHypbrowser(qtw.QWidget):
                 singleResult.downloadStartedA.connect(self.downloadStartedB) #sending signals up the hierarchy
                 singleResult.downloadFinishedA.connect(self.downloadFinishedB)
                 singleResult.downloadUnzippedA.connect(self.downloadUnzippedB)
+                singleResult.nicknameChosen.connect(self.nicknameChosenB)
                 self.qframes.append(singleResult)
                 self.resultsBoxHolder.addWidget(self.qframes[j])
                 
