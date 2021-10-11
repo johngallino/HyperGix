@@ -1,5 +1,8 @@
+from typing_extensions import final
 import config
 import workers as w
+import os
+from osgeo import gdal
 from workers import server
 from qmanager import qProfileManager, Profile
 from qhypbrowser import QHypbrowser
@@ -10,7 +13,6 @@ from PyQt5 import QtCore as qtc
 from PyQt5 import QtSql as qts
 
 import sys
-
 
 
 class ProgressBar(qtw.QProgressBar):
@@ -31,7 +33,103 @@ class ProgressBar(qtw.QProgressBar):
         self.setMaximum(100)
         self.hide()
 
+class Databaser():
+    """" Class for interacting with the database """
+
+    def pull_materials(self):
+        ''' returns a list of all materials in the database '''
+        query1 = qts.QSqlQuery(self.db)
+        # query1.prepare('SELECT * FROM materials')
+        # query1.bindValue(':id', material_id)
+        query1.exec('SELECT * FROM materials')
+        materials = []
+        while query1.next():
+            materials.append(query1.value(1))
+        print(materials)
+        return materials
     
+
+    def add_scan(self, id, nickname='None'):
+        ''' adds a hyperspectral image to the database '''
+        # assume you receive an id like 'EO1H0140312014030110KF'
+        if os.path.dirname(f'{config.HYPERION_SCANS_PATH}\{id})'):
+            filepath = os.path.join(config.HYPERION_SCANS_PATH, id, f'{id}.L1R')
+            info = gdal.Info(filepath)
+
+        def infoSearch(file, term, datalength):
+            if file.find(term) is not -1:
+                i = file.find(term) + len(term)
+                data = file[i:i+datalength]
+                return data
+            else:
+                print(f"!!! Did not find '{term}'")
+
+        rows = infoSearch(info, 'Number of Along Track Pixels=', 4)
+        samples = infoSearch(info, 'Number of Cross Track Pixels=', 3)
+        bands = infoSearch(info, 'Number of Bands=', 3)
+        interleave = infoSearch(info, 'Interleave Format=', 3)
+        datetime = infoSearch(info, 'Time of L1 File Generation=', 20)
+        dt = datetime.split(' ')
+        date = dt[0] +' '+ dt[2] + ' ' + dt[4]
+        time = dt[3]
+
+        metapath = os.path.join(config.HYPERION_SCANS_PATH, id, f'{id}.MET')
+
+        with open(metapath) as f:
+            lines = f.read()
+            print(lines)
+            f.close()
+
+        c_lat = infoSearch(lines, 'Site Latitude                ', 7).rstrip()
+        c_lon = infoSearch(lines, 'Site Longitude               ', 7).rstrip()
+        
+        print('\n')
+        print('id:', id)
+        print('rows:', rows)
+        print('samples:', samples)
+        print('bands:',bands)
+        print('interleave:', interleave)
+        print('date:', date)
+        print('time:', time)
+        print('c_lat:', c_lat)
+        print('c_lon:', c_lon)
+        print('\n')
+
+        
+
+        
+
+
+
+
+
+    def __init__(self):
+        self.db = qts.QSqlDatabase.addDatabase('QSQLITE')
+        self.db.setDatabaseName('data.db')
+    
+        if not self.db.open():
+            error = self.db.lastError().text()
+            qtw.QMessageBox.critical(
+                None, 'DB Connection Error',
+                'Could not open database file: ',
+                f'{error}')
+            sys.exit(1)
+        else:
+            print('connected to data.db')
+
+        required_tables = {'materials', 'pixels', 'scans', 'sqlite_sequence'}
+        tables = self.db.tables()
+        missing_tables = required_tables - set(tables)
+        if missing_tables:
+            qtw.QMessageBox.critical(
+                None, 'DB Integrity Error',
+                'Missing tables, please repair DB: '
+                f'{missing_tables}')
+            sys.exit(1)
+        else:
+            print('DB integrity check - OK!')
+
+
 
 class MyWindow(qtw.QMainWindow):
     """ Class for main application window """
@@ -42,7 +140,9 @@ class MyWindow(qtw.QMainWindow):
         self.setGeometry(100, 100, 1300, 900) #top, left, width, height
         self.version = '0.1'
         self.setWindowTitle('HyperGix Hyperspectral Software ' + self.version)
-        self.db = qts.QSqlDatabase.addDatabase('QSQLITE')
+        self.databoy = Databaser()
+        self.databoy.add_scan('EO1H0140312014030110KF')
+            
         self.initUI()
 
         if config.apiKey:

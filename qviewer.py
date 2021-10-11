@@ -48,7 +48,7 @@ class qViewer(qtw.QWidget):
 
         img = envi.open(h_filepath, filepath)
         desc = gdal.Info(filepath)
-        # desc = desc.split('Corner Coordinates')[0]
+        desc = desc.split('Band 1 Block')[0]
         # print('\n'+desc)
         
         

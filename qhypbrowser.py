@@ -338,8 +338,8 @@ class QHypbrowser(qtw.QWidget):
                 self.resultsBoxHolder.addWidget(self.qframes[j])
                 
                 self.counter += 1
-                print('displaying result', self.counter, 'of', self.resultCount)
-        print('COUNTER IS NOW %s' % self.counter)
+                # print('displaying result', self.counter, 'of', self.resultCount)
+        # print('COUNTER IS NOW %s' % self.counter)
     
 
         if self.resultCount > self.pageSize:
