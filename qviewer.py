@@ -17,7 +17,6 @@ from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
 
 from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
-from functions import tifCruncher
 
 
 gdal.UseExceptions()
@@ -31,19 +30,25 @@ class NavigationToolbar(NavigationToolbar2QT):
 class qViewer(qtw.QWidget):
     """ A class for the Image Viewer GUI panel """
 
+    readyForScans = qtc.pyqtSignal()
+
+    def populateScans(self, scans):
+        print('scans received:', scans)
+        for scan in scans:
+            self.downloadList.addItem(scan)
+
 
     def openTiffFromList(self, item):
         """ Processes and opens a GeoTiff image in the viewer """
-        # plt.clf()
-        # self.s_fig.cla()
         self.v_fig.clf()
         
         # Raster image
-        filename = item.text() + '.L1R'
+        item = item.text().split(' ')[0]
+        filename = item + '.L1R'
         filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], filename)
 
         # Raster header file
-        h_filename = item.text() + '.hdr'
+        h_filename = item + '.hdr'
         h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
 
         img = envi.open(h_filepath, filepath)
@@ -71,6 +76,7 @@ class qViewer(qtw.QWidget):
         # Internal variables
         self.downloads = []
         self.readable_files = {}
+        self.scansToAdd = []
 
         #Left Frame
         self.leftFrame = qtw.QVBoxLayout()
@@ -105,12 +111,14 @@ class qViewer(qtw.QWidget):
             print(DOWNLOAD_PATH)
             os.mkdir(DOWNLOAD_PATH)
 
+
+        
         for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
             for name in files:
                 if name[-3:] == 'L1R':
                     # print('inserting', name[:-4], 'in list')
                     # print(os.path.join(root, name))
-                    self.downloadList.addItem(name[:-4])
+                    # self.downloadList.addItem(name[:-4])
                     self.readable_files[name[:-4]] = os.path.join(root, name)
                     filename = name[:-4]
 
@@ -185,5 +193,7 @@ class qViewer(qtw.QWidget):
 
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
+        
 
         
