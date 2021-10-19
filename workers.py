@@ -23,9 +23,8 @@ class Databaser(qtw.QWidget):
     matsInDB = qtc.pyqtSignal(list)
 
     def report_scans(self):
-        print('about to report some scans - your databoy')
         scans = self.pull_scans()
-        print('emiting:', scans)
+        # print('emiting:', scans)
         self.scansInDB.emit(scans)
 
     def pull_scans(self):
@@ -193,6 +192,7 @@ class Databaser(qtw.QWidget):
             else:
                 print(insertQuery.lastError().text())
       
+    # def add_pixel(self, )
 
     def __init__(self):
         super().__init__()

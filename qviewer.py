@@ -1,11 +1,12 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
-from spectral.graphics.spypylab import ImageView
+from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler, set_mpl_interactive
 import spectral.io.envi as envi
 import os
 import matplotlib.pyplot as plt
 import matplotlib
 import shutil
+import warnings
 matplotlib.use('Qt5Agg')
 
 from osgeo import gdal
@@ -20,6 +21,57 @@ from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 
 
 gdal.UseExceptions()
+
+class MyImageView(ImageView):
+    # def __init__(self, data=None, bands=None, classes=None, source=None,
+    #              **kwargs):
+    #              super(MyImageView, self, data, bands, ).__init__()
+
+    def show(self, mode=None, fignum=None):
+        super().show(mode, fignum)
+        self.cb_mouse = MyMouseHandler(self)
+        self.cb_mouse.connect()
+        
+
+
+class MyMouseHandler(ImageViewMouseHandler):
+    def __init__(self, view, *args, **kwargs):
+        super(MyMouseHandler, self).__init__(view)
+
+    def handle_event(self, event):
+        '''Callback for click event in the image display.'''
+        print("HANDLE TRIGGERED")
+        if self.show_events:
+            print(event, ', key = %s' % event.key)
+        if event.inaxes is not self.view.axes:
+            return
+        (r, c) = (int(event.ydata + 0.5), int(event.xdata + 0.5))
+        (nrows, ncols) = self.view._image_shape
+        if r < 0 or r >= nrows or c < 0 or c >= ncols:
+            return
+        kp = KeyParser(event.key)
+        if event.button == 1:
+            if event.dblclick and kp.key is None:
+                if self.view.source is not None:
+                    from spectral import settings
+                    import matplotlib.pyplot as plt
+                    if self.view.spectrum_plot_fig_id is None:
+                        f = plt.figure()
+                        self.view.spectrum_plot_fig_id = f.number
+                    try:
+                        f = plt.figure(self.view.spectrum_plot_fig_id)
+                    except:
+                        f = plt.figure()
+                        self.view.spectrum_plot_fig_id = f.number
+                    s = f.gca()
+                    settings.plotter.plot(self.view.source[r, c],
+                                          self.view.source)
+                    s.xaxis.axes.relim()
+                    s.xaxis.axes.autoscale(True)
+                    f.canvas.draw()
+                    lastPixel = {"row": r, "col": c}
+                    print(lastPixel, '\n\n', self.view.source[r, c])
+                    
 
 class NavigationToolbar(NavigationToolbar2QT):
     # only display the buttons we need
@@ -46,6 +98,7 @@ class qViewer(qtw.QWidget):
         item = item.text().split(' ')[0]
         filename = item + '.L1R'
         filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], filename)
+        self.sourcename = filename
 
         # Raster header file
         h_filename = item + '.hdr'
@@ -59,10 +112,13 @@ class qViewer(qtw.QWidget):
         
         self.properties_text.setText(str(img).replace('\t', ''))
         self.properties_text.append(desc)
-        self.view = s.ImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
+        self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
         self.view.spectrum_plot_fig_id = 2
-        self.view.show(mode='data', fignum=1)
         
+        self.view.show(mode='data', fignum=1)
+        # testpixel = img.read_pixel(50,50)
+        # print('\n')
+        # print(testpixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
