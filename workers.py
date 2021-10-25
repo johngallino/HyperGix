@@ -24,8 +24,11 @@ class Databaser(qtw.QWidget):
 
     def report_scans(self):
         scans = self.pull_scans()
-        # print('emiting:', scans)
         self.scansInDB.emit(scans)
+    
+    def report_mats(self):
+        mats = self.pull_materials()
+        self.matsInDB.emit(mats)
 
     def pull_scans(self):
         ''' returns a list of scans in the database'''
@@ -42,8 +45,6 @@ class Databaser(qtw.QWidget):
     def pull_materials(self):
         ''' returns a list of all materials in the database '''
         query1 = qts.QSqlQuery(self.db)
-        # query1.prepare('SELECT * FROM materials')
-        # query1.bindValue(':id', material_id)
         query1.exec('SELECT * FROM materials')
         materials = []
         while query1.next():
@@ -192,7 +193,48 @@ class Databaser(qtw.QWidget):
             else:
                 print(insertQuery.lastError().text())
       
-    # def add_pixel(self, )
+    def add_pixel(self, id, r, c, material ):
+        ''' adds a pixel to the database '''
+        presenceCheck = qts.QSqlQuery(self.db)
+        presenceCheck.prepare('SELECT * FROM pixels WHERE source=:source, row=:row, col=:col')
+        presenceCheck.bindValue(':source', id)
+        presenceCheck.bindValue(':row', r)
+        presenceCheck.bindValue(':col', c)
+        presenceCheck.exec_()
+        if not presenceCheck.next():
+            present = False
+            print(f'That pixel is not in the database currently')
+            print('gonna add', id, r, c, material)
+
+            matQuery = qts.QSqlQuery(self.db)
+            matQuery.prepare('SELECT mid FROM materials WHERE name=:material')
+            matQuery.bindValue(':material', material)
+            matQuery.exec_()
+            target_mat = 'cheese'
+            if matQuery.next():
+                print(matQuery.record())
+                target_mat = matQuery.value(0)
+            else:
+                print('no material in db matches', material)
+
+            insertQuery = qts.QSqlQuery(self.db)
+            insertQuery.prepare('INSERT INTO pixels(source, row, col, material)'
+                'VALUES (:source, :row, :col, :material)'
+                )
+            insertQuery.bindValue(':source', id)
+            insertQuery.bindValue(':row', r)
+            insertQuery.bindValue(':col', c)
+            insertQuery.bindValue(':material', target_mat)
+            good = insertQuery.exec_()
+
+            if good:
+                print(f'pixel {id} added successfully to db')
+            else:
+                print(insertQuery.lastError().text())
+
+        else:
+            present = True
+            print(f'That pixel is already in database with material {presenceCheck.value(4)}')
 
     def __init__(self):
         super().__init__()
@@ -291,6 +333,9 @@ class LogIner(qtc.QObject):
 
     log_signal = qtc.pyqtSignal(str)
 
+    def send_log_signal(self,text):
+        self.log_signal.emit(text)
+
     def __init__(self):
         super().__init__()
         self.login()
@@ -314,13 +359,13 @@ class LogIner(qtc.QObject):
             if config.apiKey['data']:
                 print("API Key: " + config.apiKey['data'] + "\n")
                 self.login_success(config.apiKey['data'])
-                self.log_signal.emit('Logged into USGS!')
+                self.send_log_signal('Logged into USGS!')
             else:
                 self.login_failed(config.apiKey['errorCode'], config.apiKey['errorMessage'])
-                self.log_signal.emit(f"USGS Login failed!\t{config.apiKey['errorMessage']}")
+                self.send_log_signal(f"USGS Login failed!\t{config.apiKey['errorMessage']}")
         else:
             self.login_failed('No valid response.', 'USGS server may be down or you are not online.')
-            self.log_signal.emit('USGS Server is down or you are not connected to the internet')
+            self.send_log_signal('USGS Server is down or you are not connected to the internet')
 
     def toDict(self, j):
         try:

@@ -34,7 +34,7 @@ class ProgressBar(qtw.QProgressBar):
 
 class MyWindow(qtw.QMainWindow):
     """ Class for main application window """
-
+    receiveLogInSignal = qtc.pyqtSignal
     
     def __init__(self):
         super(MyWindow, self).__init__()
@@ -51,10 +51,7 @@ class MyWindow(qtw.QMainWindow):
 
         self.mainNotebook.tab1.nicknameChosenB.connect(self.databoy.add_scan)
 
-        # populating scans list
         
-        
-
         if config.apiKey:
             self.loggedIn = True
         else:
@@ -80,6 +77,9 @@ class MyWindow(qtw.QMainWindow):
         # STATUS BAR MESSAGES
         
         self.setStatusBar(self.status_bar)
+        # self.receiveLogInSignal.connect(server.send_log_signal)
+        # self.receiveLogInSignal.emit()
+        server.log_signal.connect(self.status_bar.showMessage)
         self.mainNotebook.tab1.performingSearch.connect(lambda: self.status_bar.showMessage('Performing search...'))
         self.mainNotebook.tab1.loadingResults.connect(lambda: self.status_bar.showMessage('Loading results...'))
         self.mainNotebook.tab1.downloadStartedB.connect(self.status_bar.showMessage)
@@ -91,8 +91,12 @@ class MyWindow(qtw.QMainWindow):
         
         # Populating scan list
         self.mainNotebook.tab3.readyForScans.connect(self.databoy.report_scans)
+        self.mainNotebook.tab3.readyForScans.connect(self.databoy.report_mats)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
+        self.databoy.matsInDB.connect(self.mainNotebook.tab3.populateMaterials)
         self.mainNotebook.tab3.readyForScans.emit()
+
+        self.mainNotebook.tab3.lastPixel_sig.connect(self.databoy.add_pixel)
 
         
 

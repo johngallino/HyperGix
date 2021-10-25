@@ -1,14 +1,14 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
-from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler, set_mpl_interactive
+from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler, ImageViewKeyboardHandler, set_mpl_interactive
 import spectral.io.envi as envi
 import os
 import matplotlib.pyplot as plt
 import matplotlib
 import shutil
-import warnings
+import numpy as np
 matplotlib.use('Qt5Agg')
-
+from brokenaxes import brokenaxes
 from osgeo import gdal
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
 from os.path import exists
@@ -27,20 +27,28 @@ class MyImageView(ImageView):
     #              **kwargs):
     #              super(MyImageView, self, data, bands, ).__init__()
 
+    lastPixel = {"row": 0, "col": 0}
+
     def show(self, mode=None, fignum=None):
         super().show(mode, fignum)
-        self.cb_mouse = MyMouseHandler(self)
+        self.cb_mouse = MyMouseHandler(self, self.lastPixel)
         self.cb_mouse.connect()
-        
 
+
+    def updateLastPixel(self, r, c):
+        self.lastPixel["row"] = r
+        self.lastPixel["col"] = c
 
 class MyMouseHandler(ImageViewMouseHandler):
     def __init__(self, view, *args, **kwargs):
         super(MyMouseHandler, self).__init__(view)
-
+        self.filteredBandList = []
+        for i in range(len(self.view.source.bands.centers)):
+            if i not in range(57, 78):
+                self.filteredBandList.append(i)
+        
     def handle_event(self, event):
         '''Callback for click event in the image display.'''
-        print("HANDLE TRIGGERED")
         if self.show_events:
             print(event, ', key = %s' % event.key)
         if event.inaxes is not self.view.axes:
@@ -50,8 +58,10 @@ class MyMouseHandler(ImageViewMouseHandler):
         if r < 0 or r >= nrows or c < 0 or c >= ncols:
             return
         kp = KeyParser(event.key)
+        
         if event.button == 1:
-            if event.dblclick and kp.key is None:
+            if event.dblclick and kp.key is None :
+                print(kp.key)
                 if self.view.source is not None:
                     from spectral import settings
                     import matplotlib.pyplot as plt
@@ -63,14 +73,35 @@ class MyMouseHandler(ImageViewMouseHandler):
                     except:
                         f = plt.figure()
                         self.view.spectrum_plot_fig_id = f.number
-                    s = f.gca()
-                    settings.plotter.plot(self.view.source[r, c],
-                                          self.view.source)
-                    s.xaxis.axes.relim()
-                    s.xaxis.axes.autoscale(True)
+                    f.clf()
+                    # s = f.gca()
+                    # s.set_xlabel('Wavelength')
+                    # s.set_ylabel('Reflectance')
+                    # bax = brokenaxes(xlims=((400, 915), (932, 2500)),  ylims=((0, 4000)), hspace=10)
+                    s = brokenaxes(xlims=((400, 915), (932, 2500)), hspace=.01, wspace=.04)
+
+                    
+                    x = np.linspace(400, 2500, 221)
+                    subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
+                    s.plot(x, subimage)
+                    s.set_xlabel('Wavelength')
+                    # s.set_ylabel('Reflectance')
+                    try:
+                        s.set_title(f'Pixel({r},{c}) Spectra')
+                    except:
+                        pass
+                    
+                    # settings.plotter.plot(slicedBands, slicedWavelengths)
+                    # s.xaxis.axes.relim()
+                    # s.xaxis.axes.autoscale(True)
+                    
                     f.canvas.draw()
-                    lastPixel = {"row": r, "col": c}
-                    print(lastPixel, '\n\n', self.view.source[r, c])
+                    
+                    #subclass code additions below
+                    self.view.updateLastPixel(r, c)
+                    self.lastpixel = {"row": r, "col": c}
+                    print(self.lastpixel, '\n\n', subimage)
+
                     
 
 class NavigationToolbar(NavigationToolbar2QT):
@@ -78,16 +109,43 @@ class NavigationToolbar(NavigationToolbar2QT):
     toolitems = [t for t in NavigationToolbar2QT.toolitems if
                  t[0] in ('Home', 'Back', 'Forward', 'Pan', 'Zoom', 'Save')]
 
+class MaterialDialog(qtw.QWidget):
+    def __init__(self, materials, parent = None):
+        super(MaterialDialog, self).__init__(parent)
+        self.materials = materials
+        layout = qtw.QFormLayout()
+        
+        self.setLayout(layout)
+        self.setWindowTitle("Assign to Material Profile")
+        self.le = qtw.QLineEdit()
+        self.btn = qtw.QPushButton("Choose from list")
+        self.btn.clicked.connect(self.getItem)
+        layout.addRow(self.btn, self.le)
+        self.show()
+
+    def getItem(self):
+        items = tuple(self.materials)
+		
+        item, ok = qtw.QInputDialog.getItem(self, "Assign this pixel to a material profile", "Stored Profiles", items, 0, False)
+        if ok and item:
+          self.le.setText(item)
+                
+
 
 class qViewer(qtw.QWidget):
     """ A class for the Image Viewer GUI panel """
 
     readyForScans = qtc.pyqtSignal()
+    lastPixel_sig = qtc.pyqtSignal(str, int, int, str)
 
     def populateScans(self, scans):
         print('scans received:', scans)
         for scan in scans:
             self.downloadList.addItem(scan)
+
+    def populateMaterials(self, materials):
+        print('materials received:', materials)
+        self.materials = materials
 
 
     def openTiffFromList(self, item):
@@ -109,19 +167,34 @@ class qViewer(qtw.QWidget):
         desc = desc.split('Band 1 Block')[0]
         # print('\n'+desc)
         
-        
         self.properties_text.setText(str(img).replace('\t', ''))
         self.properties_text.append(desc)
         self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
         self.view.spectrum_plot_fig_id = 2
         
         self.view.show(mode='data', fignum=1)
+        print(self.view.lastPixel)
         # testpixel = img.read_pixel(50,50)
         # print('\n')
         # print(testpixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
+    def announcePixel(self):
+        r = self.view.lastPixel["row"]
+        c = self.view.lastPixel["col"]
+        source = self.sourcename
+        
+        # pop up here
+        # self.matPop = MaterialDialog(self.materials)
+        items = tuple(self.materials)
+		
+        item, ok = qtw.QInputDialog.getItem(self, "Assign material", "Stored Profiles", items, 0, False)
+        if ok:
+            mat = item
+            self.lastPixel_sig.emit(source, r, c, mat)
+
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -241,7 +314,7 @@ class qViewer(qtw.QWidget):
         
         self.clearPlot_btn = qtw.QPushButton("Clear Plot")
         self.clearPlot_btn.clicked.connect(plt.cla)
-        self.addPixel_btn = qtw.QPushButton("Add Pixel to Profile")
+        self.addPixel_btn = qtw.QPushButton("Add Pixel to Profile", clicked=self.announcePixel)
         
 
         self.pixelButtons.layout().addWidget(self.clearPlot_btn)
