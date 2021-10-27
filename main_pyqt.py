@@ -90,13 +90,22 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
         
         # Populating scan list
-        self.mainNotebook.tab3.readyForScans.connect(self.databoy.report_scans)
-        self.mainNotebook.tab3.readyForScans.connect(self.databoy.report_mats)
+        self.mainNotebook.tab3.readyForData.connect(self.databoy.report_scans)
+        # self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
-        self.databoy.matsInDB.connect(self.mainNotebook.tab3.populateMaterials)
-        self.mainNotebook.tab3.readyForScans.emit()
 
+        # Storing row and col of last pixel clicked
         self.mainNotebook.tab3.lastPixel_sig.connect(self.databoy.add_pixel)
+
+        # Working with materials
+        self.mainNotebook.tab2.addMaterial.connect(self.databoy.add_material)
+        self.databoy.matsInDB.connect(self.mainNotebook.tab2.populateMaterials)
+        self.databoy.matsInDB.connect(self.mainNotebook.tab3.populateMaterials)
+        self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
+        self.mainNotebook.tab2.pixelsPlease.connect(self.databoy.report_pixels_for_material)
+        
+        #Go signal
+        self.mainNotebook.tab3.readyForData.emit()
 
         
 

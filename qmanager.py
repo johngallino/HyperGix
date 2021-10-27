@@ -52,6 +52,22 @@ class Profile:
 
 class qProfileManager(qtw.QFrame):
 
+    addMaterial = qtc.pyqtSignal(str)
+    readyForMaterials = qtc.pyqtSignal()
+    pixelsPlease = qtc.pyqtSignal(str)
+
+    def populateMaterials(self, materials):
+        print('materials received:', materials)
+        self.materials = materials
+        for profile in self.materials:
+            self.profileList.addItem(profile)
+
+    def plotPixels(self, data):
+        ''' recieves all pixels corresponding to a given material in the database'''
+        print('I have received the following info')
+        for result in data:
+            print(result)
+
     def load_shit(self):
         
         if os.path.exists(PROFILES_PATH) and os.stat(PROFILES_PATH).st_size > 0:
@@ -65,24 +81,25 @@ class qProfileManager(qtw.QFrame):
     def viewProfile(self, item):
 
             """ Reads contents of the selected spectral profile """
+            self.pixelsPlease.emit(item.text())
     
-            for profile in self.profiles:
-                if profile.name == item.text():
-                    target = profile
-                    pixelCount = len(target.pixels)
+            # for profile in self.profiles:
+            #     if profile.name == item.text():
+            #         target = profile
+            #         pixelCount = len(target.pixels)
 
-            # self.pixelLabel.setText(f'{item.text()}\n{pixelCount} pixels')
+            # # self.pixelLabel.setText(f'{item.text()}\n{pixelCount} pixels')
             
-            self.plot1.cla()
+            # self.plot1.cla()
 
-            for i in range(len(target.pixels)):
-                self.plot1.plot(target.pixels[i], label= 'pixel %s ' %i)
+            # for i in range(len(target.pixels)):
+            #     self.plot1.plot(target.pixels[i], label= 'pixel %s ' %i)
 
-            self.plot1.legend()
-            self.plot1.set_xlabel("Spectral Band")
-            self.plot1.set_title(f'{item.text()}\n{pixelCount} pixels')
-            # self.plot1.title(item.text())
-            self.canvas.draw()
+            # self.plot1.legend()
+            # self.plot1.set_xlabel("Spectral Band")
+            # self.plot1.set_title(f'{item.text()}\n{pixelCount} pixels')
+            # # self.plot1.title(item.text())
+            # self.canvas.draw()
             
     
     def plotAllProfiles(self):
@@ -124,14 +141,16 @@ class qProfileManager(qtw.QFrame):
         self.profilePop.show()
 
     def createProfile(self, name):
+        self.addMaterial.emit(name)
         self.profilePop.hide()
         self.profileList.addItem(name)
-        print(f'{name} profile created! But not really.')
+        print(f'{name} profile added to db')
 
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.TARGET_BANDS = [8, 13, 15, 25, 55, 77, 82, 85, 91, 93, 97, 102, 112, 115, 120, 137, 158, 183]
         self.profiles = []
+        self.materials = []
         self.load_shit()
 
         self.layout = qtw.QGridLayout()
@@ -151,9 +170,7 @@ class qProfileManager(qtw.QFrame):
         
         self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
         self.layout.addWidget(self.plotAllButton, 3, 0)
-
-        for profile in self.profiles:
-            self.profileList.addItem(profile.name)
+               
 
         self.profileList.itemDoubleClicked.connect(self.viewProfile)
 
@@ -184,4 +201,5 @@ class qProfileManager(qtw.QFrame):
         # self.pixelWindow.layout().addWidget(self.pixelLabel)
 
         self.pixelWindow.layout().addWidget(self.canvas)
+        self.readyForMaterials.emit()
         # self.viewProfile(item=self.profileList.itemFromIndex()

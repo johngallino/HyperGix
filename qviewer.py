@@ -1,6 +1,6 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
-from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler, ImageViewKeyboardHandler, set_mpl_interactive
+from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive
 import spectral.io.envi as envi
 import os
 import matplotlib.pyplot as plt
@@ -43,6 +43,7 @@ class MyMouseHandler(ImageViewMouseHandler):
     def __init__(self, view, *args, **kwargs):
         super(MyMouseHandler, self).__init__(view)
         self.filteredBandList = []
+        
         for i in range(len(self.view.source.bands.centers)):
             if i not in range(57, 78):
                 self.filteredBandList.append(i)
@@ -135,7 +136,7 @@ class MaterialDialog(qtw.QWidget):
 class qViewer(qtw.QWidget):
     """ A class for the Image Viewer GUI panel """
 
-    readyForScans = qtc.pyqtSignal()
+    readyForData = qtc.pyqtSignal()
     lastPixel_sig = qtc.pyqtSignal(str, int, int, str)
 
     def populateScans(self, scans):
@@ -146,7 +147,6 @@ class qViewer(qtw.QWidget):
     def populateMaterials(self, materials):
         print('materials received:', materials)
         self.materials = materials
-
 
     def openTiffFromList(self, item):
         """ Processes and opens a GeoTiff image in the viewer """
@@ -173,6 +173,7 @@ class qViewer(qtw.QWidget):
         self.view.spectrum_plot_fig_id = 2
         
         self.view.show(mode='data', fignum=1)
+        plt.tight_layout()
         print(self.view.lastPixel)
         # testpixel = img.read_pixel(50,50)
         # print('\n')
@@ -198,7 +199,7 @@ class qViewer(qtw.QWidget):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-
+        # s.settings.imshow_figure_size = (2, 20)
         self.layout = qtw.QHBoxLayout()
         self.setLayout(self.layout)
         
@@ -277,17 +278,20 @@ class qViewer(qtw.QWidget):
         self.v_midframe.setLayout(qtw.QVBoxLayout())
 
         self.v_imageFrame = qtw.QWidget()
+        # self.v_imageFrame.setStyleSheet("background-color:#ccc;")
         self.v_imageFrame.setLayout(qtw.QVBoxLayout())
 
         self.splitter = qtw.QSplitter()
 
         self.subLayout = qtw.QWidget()
+        # self.subLayout.setStyleSheet("background-color:red;")
         self.subLayout.setLayout(qtw.QVBoxLayout())
 
         self.subLayout2 = qtw.QWidget()
+        # self.subLayout2.setStyleSheet("background-color:blue;")
         self.subLayout2.setLayout(qtw.QVBoxLayout())
        
-        self.v_fig = plt.figure(figsize=(1,5))
+        self.v_fig = plt.figure(figsize=(1,5), dpi=80)
         self.s_fig = plt.figure(figsize=(6,5))
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
@@ -295,8 +299,8 @@ class qViewer(qtw.QWidget):
         self.v_canvas_nav = NavigationToolbar(self.v_imageCanvas, self.v_midframe)
 
         self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
-        self.ax1.set_axis_off()
         self.v_fig.add_axes(self.ax1)
+        self.ax1.set_axis_off()
         self.s_fig.suptitle('Pixel Spectra', fontsize=10)
 
         self.pixelButtons = qtw.QWidget()
@@ -304,6 +308,7 @@ class qViewer(qtw.QWidget):
 
         self.v_midframe.layout().addWidget(self.v_imageFrame)
         self.v_imageFrame.layout().addWidget(self.splitter)
+
         self.layout.addWidget(self.v_midframe)
         self.subLayout.layout().addWidget(self.v_canvas_nav)
         self.subLayout.layout().addWidget(self.v_imageCanvas)
