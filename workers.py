@@ -5,6 +5,7 @@ import ast
 import shutil
 import os
 import sys
+import spectral.io.envi as envi
 from PyQt5 import QtSql as qts
 from osgeo import gdal
 from os import getcwd
@@ -215,20 +216,33 @@ class Databaser(qtw.QWidget):
         presenceCheck.bindValue(':col', c)
         presenceCheck.exec_()
         if not presenceCheck.next():
-            present = False
+            print('id is:', id)
+            header = id.replace('L1R', 'hdr')
+            header = os.path.join(DOWNLOAD_PATH, id[:-4], header)
+            filepath = os.path.join(DOWNLOAD_PATH, id[:-4], id)
+            
+
+            img = envi.open(header, filepath)
+            spectra = ''
+            for val in img[r,c]:
+                spectra += str(val) + ' '
+
+            print('spectra is:', spectra)
+
             print(f'That pixel is not in the database currently')
             # print('gonna add', id, r, c, material)
 
             target_mat = self.get_mid(material)
 
             insertQuery = qts.QSqlQuery(self.db)
-            insertQuery.prepare('INSERT INTO pixels(source, row, col, material)'
-                'VALUES (:source, :row, :col, :material)'
+            insertQuery.prepare('INSERT INTO pixels(source, row, col, material, spectra)'
+                'VALUES (:source, :row, :col, :material, :spectra)'
                 )
             insertQuery.bindValue(':source', id)
             insertQuery.bindValue(':row', r)
             insertQuery.bindValue(':col', c)
             insertQuery.bindValue(':material', target_mat)
+            insertQuery.bindValue(':spectra', spectra)
             good = insertQuery.exec_()
 
             if good:
@@ -268,14 +282,14 @@ class Databaser(qtw.QWidget):
         ''' queries the database for all pixels belonging to a material '''
         mid = self.get_mid(name)
         query1 = qts.QSqlQuery(self.db)
-        query1.prepare('SELECT * FROM pixels WHERE material = :material')
+        query1.prepare('SELECT pid, spectra FROM pixels WHERE material = :material')
         query1.bindValue(':material', mid)
         query1.exec_()
 
         results=[]
 
         while query1.next():
-            results.append([query1.value(0), query1.value(1), query1.value(2), query1.value(3)])
+            results.append({str(query1.value(0)): query1.value(1)})
         
         if results:
             print(str(len(results)) + f' Pixels for {name}')
@@ -284,7 +298,7 @@ class Databaser(qtw.QWidget):
         else:
             print(f'No pixels for {name}')
             print('\n')
-            
+
         self.reportPixels.emit(results)
 
 

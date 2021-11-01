@@ -2,7 +2,7 @@ import os
 import pickle
 import matplotlib
 matplotlib.use('Qt5Agg')
-
+import spectral as s
 from osgeo import gdal
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
@@ -66,7 +66,7 @@ class qProfileManager(qtw.QFrame):
         ''' recieves all pixels corresponding to a given material in the database'''
         print('I have received the following info')
         for result in data:
-            print(result)
+            pass
 
     def load_shit(self):
         
@@ -78,28 +78,44 @@ class qProfileManager(qtw.QFrame):
         else:
             print('No profiles bin file found')
 
-    def viewProfile(self, item):
+    def requestPixels(self, item):
+        material = item.text()
+        self.pixelsPlease.emit(material)
 
-            """ Reads contents of the selected spectral profile """
-            self.pixelsPlease.emit(item.text())
-    
-            # for profile in self.profiles:
-            #     if profile.name == item.text():
-            #         target = profile
-            #         pixelCount = len(target.pixels)
+    def plotProfile(self, pixelList):
+        """ Receives a list of pixel data and plots it in the viewer tab """
 
-            # # self.pixelLabel.setText(f'{item.text()}\n{pixelCount} pixels')
+        material = self.profileList.currentItem()
+        material = material.text()
+
+        if pixelList:
+            pixelCount = len(pixelList)
             
-            # self.plot1.cla()
+            
+            self.pixelLabel.setText(f'{material}\n{pixelCount} pixels')
+            
+            self.plot1.cla()
 
-            # for i in range(len(target.pixels)):
-            #     self.plot1.plot(target.pixels[i], label= 'pixel %s ' %i)
+            for pixel in pixelList:
+                for i in pixel:
+                    stringList = pixel[i].split()
+                    print(stringList)
 
-            # self.plot1.legend()
-            # self.plot1.set_xlabel("Spectral Band")
-            # self.plot1.set_title(f'{item.text()}\n{pixelCount} pixels')
-            # # self.plot1.title(item.text())
-            # self.canvas.draw()
+
+                    intList = list(map(int, stringList))
+                    print(intList)
+                    self.plot1.plot(intList, label=f'Pixel {i}')
+
+            self.plot1.legend()
+            self.plot1.set_xlabel("Band Number")
+            self.canvas.draw()
+
+        else:
+            self.pixelLabel.setText(f'No pixels stored for {material}')
+            self.plot1.cla()
+        
+        
+        
             
     
     def plotAllProfiles(self):
@@ -172,7 +188,7 @@ class qProfileManager(qtw.QFrame):
         self.layout.addWidget(self.plotAllButton, 3, 0)
                
 
-        self.profileList.itemDoubleClicked.connect(self.viewProfile)
+        self.profileList.itemDoubleClicked.connect(self.requestPixels)
 
         
         ### Profile Details
@@ -198,7 +214,7 @@ class qProfileManager(qtw.QFrame):
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.canvas.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
 
-        # self.pixelWindow.layout().addWidget(self.pixelLabel)
+        self.pixelWindow.layout().addWidget(self.pixelLabel)
 
         self.pixelWindow.layout().addWidget(self.canvas)
         self.readyForMaterials.emit()

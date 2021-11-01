@@ -102,6 +102,7 @@ class MyMouseHandler(ImageViewMouseHandler):
                     self.view.updateLastPixel(r, c)
                     self.lastpixel = {"row": r, "col": c}
                     print(self.lastpixel, '\n\n', subimage)
+                    
 
                     
 
@@ -175,9 +176,6 @@ class qViewer(qtw.QWidget):
         self.view.show(mode='data', fignum=1)
         plt.tight_layout()
         print(self.view.lastPixel)
-        # testpixel = img.read_pixel(50,50)
-        # print('\n')
-        # print(testpixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()

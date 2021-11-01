@@ -103,6 +103,7 @@ class MyWindow(qtw.QMainWindow):
         self.databoy.matsInDB.connect(self.mainNotebook.tab3.populateMaterials)
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.mainNotebook.tab2.pixelsPlease.connect(self.databoy.report_pixels_for_material)
+        self.databoy.reportPixels.connect(self.mainNotebook.tab2.plotProfile)
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
