@@ -23,6 +23,7 @@ class Databaser(qtw.QWidget):
     scansInDB = qtc.pyqtSignal(list)
     matsInDB = qtc.pyqtSignal(list)
     reportPixels = qtc.pyqtSignal(list)
+    reportPixelSource = qtc.pyqtSignal(str, int, int)
 
     def report_scans(self):
         scans = self.pull_scans()
@@ -238,7 +239,7 @@ class Databaser(qtw.QWidget):
             insertQuery.prepare('INSERT INTO pixels(source, row, col, material, spectra)'
                 'VALUES (:source, :row, :col, :material, :spectra)'
                 )
-            insertQuery.bindValue(':source', id)
+            insertQuery.bindValue(':source', id.replace('.L1R', ''))
             insertQuery.bindValue(':row', r)
             insertQuery.bindValue(':col', c)
             insertQuery.bindValue(':material', target_mat)
@@ -279,6 +280,7 @@ class Databaser(qtw.QWidget):
             print(f'That material is already in the database')
 
     def report_pixels_for_material(self, name):
+
         ''' queries the database for all pixels belonging to a material '''
         mid = self.get_mid(name)
         query1 = qts.QSqlQuery(self.db)
@@ -293,7 +295,7 @@ class Databaser(qtw.QWidget):
         
         if results:
             print(str(len(results)) + f' Pixels for {name}')
-            print(results)
+            # print(results)
             print('\n')
         else:
             print(f'No pixels for {name}')
@@ -301,6 +303,33 @@ class Databaser(qtw.QWidget):
 
         self.reportPixels.emit(results)
 
+    def report_info_for_pid(self, pid):
+        ''' given a pixel ID (pid), returns row, column and source image from db '''
+        pid = pid.text()
+        print(pid)
+        query = qts.QSqlQuery(self.db)
+        query.prepare('SELECT filepath, row, col from pixels LEFT JOIN scans on scans.id = pixels.source where pid = :pid')
+        query.bindValue(':pid', pid)
+        query.exec_()
+        
+        if query.next():
+            print('returning', query.value(0), query.value(1), query.value(2))
+            self.reportPixelSource.emit(query.value(0), query.value(1), query.value(2))
+
+            
+
+
+    def deletePixel(self, pid):
+        ''' deletes a pixel from db by given PID '''
+        query1 = qts.QSqlQuery(self.db)
+        query1.prepare('DELETE from pixels WHERE pid = :pid')
+        query1.bindValue(':pid', pid)
+        good = query1.exec_()
+
+        if good:
+            print(f'Pixel {pid} deleted from db')
+        else:
+            print(query1.lastError().text())
 
 
     def __init__(self):

@@ -3,7 +3,7 @@ import config
 import workers as w
 import os
 from workers import server, Databaser
-from qmanager import qProfileManager, Profile
+from qmanager import qProfileManager
 from qhypbrowser import QHypbrowser
 from qviewer import qViewer
 from PyQt5 import QtWidgets as qtw
@@ -104,6 +104,10 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.mainNotebook.tab2.pixelsPlease.connect(self.databoy.report_pixels_for_material)
         self.databoy.reportPixels.connect(self.mainNotebook.tab2.plotProfile)
+
+        # Working with pixel data
+        self.mainNotebook.tab2.pixelViewer.pixelListView.itemClicked.connect(self.databoy.report_info_for_pid)
+        self.databoy.reportPixelSource.connect(self.mainNotebook.tab2.pixelViewer.findPixel)
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
@@ -139,7 +143,6 @@ class MyNotebook(qtw.QWidget):
 def window():
     app = qtw.QApplication(sys.argv)
     win = MyWindow()
-    
     win.show()
     sys.exit(app.exec_())
 

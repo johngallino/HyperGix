@@ -1,11 +1,16 @@
 import os
 import pickle
 import matplotlib
+import spectral.io.envi as envi
+from spectral.graphics.spypylab import ImageView
+from qviewer import qViewer, NavigationToolbar, MyImageView
 matplotlib.use('Qt5Agg')
 import spectral as s
 from osgeo import gdal
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from config import HYPERION_SCANS_PATH
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
@@ -19,35 +24,94 @@ LAN_PATH = os.path.join(os.getcwd(), 'downloads')
 PROFILES_PATH = os.path.join(os.getcwd(), 'profiles.bin')
 NICKNAMES_PATH = os.path.join(os.getcwd(), 'nicknames.bin')
 
-class Pixel:
-    """ A single pixel taken from a hyperspectral image """
-    def __init__(self, source, row, col):
-        self.source = source
-        self.row = row
-        self.col = col
+class PixelViewer(qtw.QFrame):
 
-class Profile:
-    """ A spectral profile """
-    def __init__(self, nickname):
-        self.id = ''
-        self.rows = ''
-        self.samples = '' # columns
-        self.bands = '' # number of bands
-        self.sensor = ''
-        self.interleave = ''
-        self.nickname = nickname
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.setFrameShape(qtw.QFrame.Box)
+        self.pixelsToList = []
+        # Left Side
+        self.setMaximumWidth(500)
+        self.layout = qtw.QHBoxLayout()
+        self.setLayout(self.layout)
+        self.leftFrame = qtw.QVBoxLayout()
+        self.pixelListLabel = qtw.QLabel("<b>Pixel Viewer</b>")
+        self.pixelListLabel.setAlignment(qtc.Qt.AlignCenter)
+        self.pixelListLabel.setFont(qtg.QFont('Arial', 12))
+
+        self.pixelListView = qtw.QListWidget()
+        self.pixelListView.setMaximumWidth(150)
+        self.pixelListView.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Expanding)
+        # self.downloadList.itemDoubleClicked.connect(self.openTiffFromList)
+        self.delPixel_btn = qtw.QPushButton("Delete Pixel")
+        self.delPixel_btn.setMaximumWidth(150)
+        
+        self.leftFrame.addWidget(self.pixelListLabel)
+        self.leftFrame.addWidget(self.pixelListView)
+        self.leftFrame.addWidget(self.delPixel_btn, )
+
+        self.layout.addLayout(self.leftFrame)
+        
+
+        # Right Side
+
+        self.v_midframe = qtw.QWidget()
+        self.v_midframe.setMaximumWidth(180)
+        self.v_midframe.setLayout(qtw.QVBoxLayout())
+        self.v_midframe.setStyleSheet("background-color:#ccc; padding:0,0")
+        
        
-        self.pixels = []
-        self.avgSpectra = []
+        self.v_fig = plt.figure(figsize=(10, 1))
+        print('pixel viewer v_fig is', self.v_fig.number) ### It's 2
 
-    def addPixel(self, pixel):
-        self.pixels.append(pixel)
+        self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
+        # self.v_canvas_nav = NavigationToolbar2QT(self.v_imageCanvas, self.v_midframe)
 
-    def delPixel(self, i):
-        self.pixels.pop(i)
+        self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
+        self.v_fig.add_axes(self.ax1)
+        self.ax1.set_axis_off()
 
-    def showValues(self):
-        print(self.pixels)
+  
+        # self.v_midframe.layout().addWidget(self.v_canvas_nav)
+        self.v_midframe.layout().addWidget(self.v_imageCanvas)
+        # self.v_midframe.layout().addWidget(self.subLayout)
+
+        self.v_imageCanvas.draw()
+
+        self.layout.addWidget(self.v_midframe)
+        self.pixelDetailLabel = qtw.QLabel()
+        self.layout.addWidget(self.pixelDetailLabel)
+        # self.layout.addWidget(self.v_canvas_nav)
+
+
+    def populatePixelList(self):
+        
+        self.pixelListView.clear()
+
+        for pixel in self.pixelsToList:
+            self.pixelListView.addItem(pixel)
+
+    def findPixel(self, source, r, c):
+        print('SOURCE IS', source)
+        self.v_fig.clear()
+        self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
+        self.v_fig.add_axes(self.ax1)
+        self.ax1.set_axis_off()
+        name = source.replace('.L1R', '')[-22:]
+        self.pixelDetailLabel.setText(f'{name}\nRow: {r}\nCol: {c}')
+        img = envi.open(source.replace('.L1R', '.hdr'), source)
+        self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)        
+        # self.view.show(fignum=1)
+        # self.view.pan_to(r,c)
+        self.view.open_zoom(center=(r,c), size=65, fignum=2)
+        # self.view.axes.add_patch(patches.Rectangle((r,c), 2, 2, linewidth=1, facecolor='none'))
+
+        self.v_imageCanvas.draw()
+        
+
+        
+        
+
 
 
 class qProfileManager(qtw.QFrame):
@@ -55,19 +119,14 @@ class qProfileManager(qtw.QFrame):
     addMaterial = qtc.pyqtSignal(str)
     readyForMaterials = qtc.pyqtSignal()
     pixelsPlease = qtc.pyqtSignal(str)
+    deleteThisPid = qtc.pyqtSignal(str)
 
     def populateMaterials(self, materials):
         print('materials received:', materials)
         self.materials = materials
         for profile in self.materials:
             self.profileList.addItem(profile)
-
-    def plotPixels(self, data):
-        ''' recieves all pixels corresponding to a given material in the database'''
-        print('I have received the following info')
-        for result in data:
-            pass
-
+ 
     def load_shit(self):
         
         if os.path.exists(PROFILES_PATH) and os.stat(PROFILES_PATH).st_size > 0:
@@ -84,62 +143,71 @@ class qProfileManager(qtw.QFrame):
 
     def plotProfile(self, pixelList):
         """ Receives a list of pixel data and plots it in the viewer tab """
-
+        self.currentPixels = []
         material = self.profileList.currentItem()
         material = material.text()
 
         if pixelList:
             pixelCount = len(pixelList)
-            
-            
             self.pixelLabel.setText(f'{material}\n{pixelCount} pixels')
             
             self.plot1.cla()
 
             for pixel in pixelList:
+                pid = list(pixel.keys())
+                self.currentPixels.append(pid[0])
+                self.pixelViewer.pixelsToList = self.currentPixels
+                self.pixelViewer.pixelListView.clear()
+                self.pixelViewer.populatePixelList()
+
                 for i in pixel:
                     stringList = pixel[i].split()
-                    print(stringList)
-
-
                     intList = list(map(int, stringList))
-                    print(intList)
                     self.plot1.plot(intList, label=f'Pixel {i}')
 
             self.plot1.legend()
             self.plot1.set_xlabel("Band Number")
             self.canvas.draw()
+            
+            # self.deletePixelButton.show()
 
         else:
             self.pixelLabel.setText(f'No pixels stored for {material}')
             self.plot1.cla()
+
+            self.deletePixelButton.hide()
         
-        
-        
-            
-    
     def plotAllProfiles(self):
         """ Plots all profiles on one graph"""
         self.plot1.cla()
-        for profile in self.profiles: 
-            pixels = profile.pixels
-            avgSpectra = []
-            for j in range(len(self.TARGET_BANDS)):
-                total = 0
-                for i in range(len(pixels)):
-                    total += pixels[i][j]
-                    avg = round(total/len(pixels))
-                avgSpectra.append(avg)
-            print(profile.name + '\n'+ str(avgSpectra) + '\n')
+        # for profile in self.profiles: 
+        #     pixels = profile.pixels
+        #     avgSpectra = []
+        #     for j in range(len(self.TARGET_BANDS)):
+        #         total = 0
+        #         for i in range(len(pixels)):
+        #             total += pixels[i][j]
+        #             avg = round(total/len(pixels))
+        #         avgSpectra.append(avg)
+        #     print(profile.name + '\n'+ str(avgSpectra) + '\n')
             
-            profile.avgSpectra = avgSpectra
-            self.plot1.plot(avgSpectra, label=profile.name)
-        self.plot1.legend()
-        # self.plot1.set_xticks([0, 1, 2, 3])
-        self.plot1.set_xlabel('Band')
-        self.plot1.set_title('All Saved Spectral Profiles')
+        #     profile.avgSpectra = avgSpectra
+        #     self.plot1.plot(avgSpectra, label=profile.name)
+        # self.plot1.legend()
+        # # self.plot1.set_xticks([0, 1, 2, 3])
+        # self.plot1.set_xlabel('Band')
+        # self.plot1.set_title('All Saved Spectral Profiles')
         
         self.canvas.draw()
+
+    def deletePixel(self):
+        """ Pops up a modal window asking which pixel to remove from db """
+        items = tuple(self.currentPixels)
+		
+        item, ok = qtw.QInputDialog.getItem(self, "Select Pixel", "Which pixel to delete?", items, 0, False)
+        if ok:
+            badPixel = item
+            self.deleteThisPid.emit(badPixel)
 
     def profilePop(self):
         """ Pops up a modal window for creating a new profile """
@@ -167,7 +235,8 @@ class qProfileManager(qtw.QFrame):
         self.TARGET_BANDS = [8, 13, 15, 25, 55, 77, 82, 85, 91, 93, 97, 102, 112, 115, 120, 137, 158, 183]
         self.profiles = []
         self.materials = []
-        self.load_shit()
+        self.currentPixels = []
+        # self.load_shit()
 
         self.layout = qtw.QGridLayout()
 
@@ -185,7 +254,7 @@ class qProfileManager(qtw.QFrame):
         self.layout.addWidget(self.addProfileButton, 2, 0)
         
         self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
-        self.layout.addWidget(self.plotAllButton, 3, 0)
+        # self.layout.addWidget(self.plotAllButton, 3, 0)
                
 
         self.profileList.itemDoubleClicked.connect(self.requestPixels)
@@ -205,9 +274,10 @@ class qProfileManager(qtw.QFrame):
         self.layout.addWidget(self.pixelWindow, 1, 1, 3, 3)
 
         self.setLayout(self.layout)
-
     
-        self.fig = Figure(figsize=(12,4))
+        # self.fig = Figure(figsize=(12,4))
+        self.fig =  plt.figure(figsize=(12,4), dpi=80)
+        print('pixel profile fig number:', self.fig.number)
     
         self.plot1 = self.fig.add_subplot(111)
         
@@ -215,7 +285,22 @@ class qProfileManager(qtw.QFrame):
         self.canvas.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
 
         self.pixelWindow.layout().addWidget(self.pixelLabel)
-
         self.pixelWindow.layout().addWidget(self.canvas)
+        
+        # Delete pixel button
+        self.deletePixelButton = qtw.QPushButton("Delete A Pixel", clicked=self.deletePixel)
+        self.deletePixelButton.setMaximumWidth(100)
+        self.sublayout = qtw.QHBoxLayout()
+        self.pixelWindow.layout().addLayout(self.sublayout)
+        # self.sublayout.addStretch()
+        
+
+        # Pixel viewer
+        self.pixelViewer = PixelViewer()
+        self.pixelViewer.setMaximumHeight(200)
+        self.sublayout.addWidget(self.pixelViewer)
+        self.sublayout.addWidget(self.deletePixelButton)
+        self.deletePixelButton.hide()
+
         self.readyForMaterials.emit()
-        # self.viewProfile(item=self.profileList.itemFromIndex()
+        

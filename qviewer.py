@@ -1,8 +1,9 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
-from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive
+from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive, ParentViewPanCallback
 import spectral.io.envi as envi
 import os
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import matplotlib
 import shutil
@@ -23,9 +24,10 @@ from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 gdal.UseExceptions()
 
 class MyImageView(ImageView):
-    # def __init__(self, data=None, bands=None, classes=None, source=None,
-    #              **kwargs):
-    #              super(MyImageView, self, data, bands, ).__init__()
+    def __init__(self, data=None, bands=None, classes=None, source=None,
+                 **kwargs):
+                 ImageView.__init__(self, data, bands, classes, source,
+                 **kwargs)
 
     lastPixel = {"row": 0, "col": 0}
 
@@ -33,11 +35,50 @@ class MyImageView(ImageView):
         super().show(mode, fignum)
         self.cb_mouse = MyMouseHandler(self, self.lastPixel)
         self.cb_mouse.connect()
-
+        self.cb_mouse.show_events = True
 
     def updateLastPixel(self, r, c):
         self.lastPixel["row"] = r
         self.lastPixel["col"] = c
+
+    def open_zoom(self, center=None, size=None, fignum=2):
+        '''Modified original method to display zoomed view in self NOT a new window '''
+
+        from spectral import settings
+        import matplotlib.pyplot as plt
+        if size is None:
+            size = settings.imshow_zoom_pixel_width
+        (nrows, ncols) = self.data.shape[:2]
+        fig_kwargs = {}
+        if settings.imshow_zoom_figure_width is not None:
+            width = settings.imshow_zoom_figure_width
+            fig_kwargs['figsize'] = (width, width)
+        # fig = plt.figure(**fig_kwargs)
+        # fig = self.
+        # self.imshow_data_kwargs
+        # view = ImageView(source=self.source)
+        # view.set_data(self.data, self.bands, **self.rgb_kwargs)
+        # view.set_classes(self.classes, self.class_colors)
+        # view.imshow_data_kwargs = self.imshow_data_kwargs.copy()
+        kwargs = {'extent': (-0.5, ncols - 0.5, nrows - 0.5, -0.5)}
+        self.imshow_data_kwargs.update(kwargs)
+        # view.imshow_class_kwargs = self.imshow_class_kwargs.copy()
+        # view.imshow_class_kwargs.update(kwargs)
+        # view.callbacks_common = self.callbacks_common
+        # view.spectrum_plot_fig_id = self.spectrum_plot_fig_id
+        self.show(fignum=fignum, mode=self.display_mode)
+        self.axes.set_xlim(0, size)
+        self.axes.set_ylim(size, 0)
+        self.interpolation = 'nearest'
+        if center is not None:
+            print('panning to', center[1], center[0])
+            self.pan_to(*center)
+            self.axes.add_patch(patches.Rectangle((center[1]-1, center[0]-1), 2, 2, linewidth=1, edgecolor='w', facecolor='none'))
+            
+            
+            # self.axes.add_patch(patches.Rectangle((0, 0), 3, 3, linewidth=1, edgecolor='w', facecolor='none'))
+
+        # return view
 
 class MyMouseHandler(ImageViewMouseHandler):
     def __init__(self, view, *args, **kwargs):
@@ -67,6 +108,7 @@ class MyMouseHandler(ImageViewMouseHandler):
                     from spectral import settings
                     import matplotlib.pyplot as plt
                     if self.view.spectrum_plot_fig_id is None:
+                        print('self.view.spectrum_plot_fig_id is none')
                         f = plt.figure()
                         self.view.spectrum_plot_fig_id = f.number
                     try:
@@ -171,9 +213,9 @@ class qViewer(qtw.QWidget):
         self.properties_text.setText(str(img).replace('\t', ''))
         self.properties_text.append(desc)
         self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
-        self.view.spectrum_plot_fig_id = 2
+        self.view.spectrum_plot_fig_id = 4
         
-        self.view.show(mode='data', fignum=1)
+        self.view.show(mode='data', fignum=3)
         plt.tight_layout()
         print(self.view.lastPixel)
         
@@ -291,6 +333,9 @@ class qViewer(qtw.QWidget):
        
         self.v_fig = plt.figure(figsize=(1,5), dpi=80)
         self.s_fig = plt.figure(figsize=(6,5))
+
+        print('v_fig number:', self.v_fig.number)
+        print('s_fig number:', self.s_fig.number)
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
         self.v_spectraCanvas = FigureCanvasQTAgg(self.s_fig)
