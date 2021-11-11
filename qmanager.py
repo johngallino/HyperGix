@@ -6,7 +6,9 @@ from spectral.graphics.spypylab import ImageView
 from qviewer import qViewer, NavigationToolbar, MyImageView
 matplotlib.use('Qt5Agg')
 import spectral as s
+import numpy as np
 from osgeo import gdal
+from brokenaxes import brokenaxes
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -120,6 +122,7 @@ class qProfileManager(qtw.QFrame):
     readyForMaterials = qtc.pyqtSignal()
     pixelsPlease = qtc.pyqtSignal(str)
     deleteThisPid = qtc.pyqtSignal(str)
+    calcAvgPls = qtc.pyqtSignal(str)
 
     def populateMaterials(self, materials):
         print('materials received:', materials)
@@ -127,46 +130,56 @@ class qProfileManager(qtw.QFrame):
         for profile in self.materials:
             self.profileList.addItem(profile)
  
-    def load_shit(self):
-        
-        if os.path.exists(PROFILES_PATH) and os.stat(PROFILES_PATH).st_size > 0:
-            infile = open(PROFILES_PATH,'rb')
-            self.profiles = pickle.load(infile)
-            infile.close()
-            print('profiles.bin loaded')
-        else:
-            print('No profiles bin file found')
-
     def requestPixels(self, item):
         material = item.text()
         self.pixelsPlease.emit(material)
 
-    def plotProfile(self, pixelList):
+    def requestAverage(self, item):
+        item = item.text()
+        self.calcAvgPls.emit(item)
+
+    def plotProfile(self, pixelList, bandcount):
         """ Receives a list of pixel data and plots it in the viewer tab """
         self.currentPixels = []
         material = self.profileList.currentItem()
         material = material.text()
+        badbands = range(57,78)
 
         if pixelList:
             pixelCount = len(pixelList)
             self.pixelLabel.setText(f'{material}\n{pixelCount} pixels')
-            
-            self.plot1.cla()
 
+            self.plot1.cla()
+            self.x = np.linspace(400, 2500, 221)
+            self.plotList = []
             for pixel in pixelList:
                 pid = list(pixel.keys())
                 self.currentPixels.append(pid[0])
                 self.pixelViewer.pixelsToList = self.currentPixels
                 self.pixelViewer.pixelListView.clear()
                 self.pixelViewer.populatePixelList()
+                
 
                 for i in pixel:
                     stringList = pixel[i].split()
                     intList = list(map(int, stringList))
-                    self.plot1.plot(intList, label=f'Pixel {i}')
+                    count = len(intList)
+                    while count > 0:
+                        if count in badbands:
+                            intList.pop(count)
+                        count -= 1
+                    
+                    self.plot1.plot(self.x, intList, label=f'Pixel {i}', linewidth='1', alpha=0.3)
+                    self.plotList.append(intList)
 
+            print(self.plotList)
+            print('length of plotlist is', len(self.plotList))
+            avg = [sum(x) / len(x) for x in zip(*self.plotList)]
+            
+
+            self.plot1.plot(self.x, avg, label='Average', linestyle='-', linewidth='2', color='midnightblue')
             self.plot1.legend()
-            self.plot1.set_xlabel("Band Number")
+            self.plot1.set_xlabel("Wavelength")
             self.canvas.draw()
             
             # self.deletePixelButton.show()
@@ -174,7 +187,6 @@ class qProfileManager(qtw.QFrame):
         else:
             self.pixelLabel.setText(f'No pixels stored for {material}')
             self.plot1.cla()
-
             self.deletePixelButton.hide()
         
     def plotAllProfiles(self):
@@ -236,7 +248,7 @@ class qProfileManager(qtw.QFrame):
         self.profiles = []
         self.materials = []
         self.currentPixels = []
-        # self.load_shit()
+        
 
         self.layout = qtw.QGridLayout()
 
@@ -252,12 +264,16 @@ class qProfileManager(qtw.QFrame):
 
         self.addProfileButton = qtw.QPushButton("Create New Profile", clicked=self.profilePop)
         self.layout.addWidget(self.addProfileButton, 2, 0)
+
+        self.delProfileButton = qtw.QPushButton('Delete Profile')
+        self.layout.addWidget(self.delProfileButton, 3, 0)
         
         self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
         # self.layout.addWidget(self.plotAllButton, 3, 0)
                
 
         self.profileList.itemDoubleClicked.connect(self.requestPixels)
+        self.profileList.itemDoubleClicked.connect(self.requestAverage)
 
         
         ### Profile Details
@@ -274,13 +290,10 @@ class qProfileManager(qtw.QFrame):
         self.layout.addWidget(self.pixelWindow, 1, 1, 3, 3)
 
         self.setLayout(self.layout)
-    
-        # self.fig = Figure(figsize=(12,4))
-        self.fig =  plt.figure(figsize=(12,4), dpi=80)
-        print('pixel profile fig number:', self.fig.number)
+        self.fig =  plt.figure(figsize=(12,4))
     
         self.plot1 = self.fig.add_subplot(111)
-        
+
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.canvas.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
 

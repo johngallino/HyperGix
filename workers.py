@@ -22,7 +22,7 @@ class Databaser(qtw.QWidget):
 
     scansInDB = qtc.pyqtSignal(list)
     matsInDB = qtc.pyqtSignal(list)
-    reportPixels = qtc.pyqtSignal(list)
+    reportPixels = qtc.pyqtSignal(list, int)
     reportPixelSource = qtc.pyqtSignal(str, int, int)
 
     def report_scans(self):
@@ -284,24 +284,33 @@ class Databaser(qtw.QWidget):
         ''' queries the database for all pixels belonging to a material '''
         mid = self.get_mid(name)
         query1 = qts.QSqlQuery(self.db)
-        query1.prepare('SELECT pid, spectra FROM pixels WHERE material = :material')
+        query1.prepare('SELECT pid, spectra, bands FROM pixels LEFT JOIN scans on scans.id = pixels.source WHERE material = :material')
         query1.bindValue(':material', mid)
         query1.exec_()
-
         results=[]
+        bandcounts = []
 
         while query1.next():
             results.append({str(query1.value(0)): query1.value(1)})
-        
+            bandcounts.append(int(query1.value(2)))
+
         if results:
             print(str(len(results)) + f' Pixels for {name}')
+            print('Max num of bands is', max(bandcounts))
             # print(results)
             print('\n')
+            self.reportPixels.emit(results, max(bandcounts))
+
         else:
             print(f'No pixels for {name}')
             print('\n')
+            self.reportPixels.emit(results, 242)
 
-        self.reportPixels.emit(results)
+        
+
+    
+
+        
 
     def report_info_for_pid(self, pid):
         ''' given a pixel ID (pid), returns row, column and source image from db '''

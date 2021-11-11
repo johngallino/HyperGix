@@ -35,7 +35,7 @@ class MyImageView(ImageView):
         super().show(mode, fignum)
         self.cb_mouse = MyMouseHandler(self, self.lastPixel)
         self.cb_mouse.connect()
-        self.cb_mouse.show_events = True
+        # self.cb_mouse.show_events = True
 
     def updateLastPixel(self, r, c):
         self.lastPixel["row"] = r
@@ -117,13 +117,7 @@ class MyMouseHandler(ImageViewMouseHandler):
                         f = plt.figure()
                         self.view.spectrum_plot_fig_id = f.number
                     f.clf()
-                    # s = f.gca()
-                    # s.set_xlabel('Wavelength')
-                    # s.set_ylabel('Reflectance')
-                    # bax = brokenaxes(xlims=((400, 915), (932, 2500)),  ylims=((0, 4000)), hspace=10)
                     s = brokenaxes(xlims=((400, 915), (932, 2500)), hspace=.01, wspace=.04)
-
-                    
                     x = np.linspace(400, 2500, 221)
                     subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
                     s.plot(x, subimage)
@@ -133,10 +127,7 @@ class MyMouseHandler(ImageViewMouseHandler):
                         s.set_title(f'Pixel({r},{c}) Spectra')
                     except:
                         pass
-                    
-                    # settings.plotter.plot(slicedBands, slicedWavelengths)
-                    # s.xaxis.axes.relim()
-                    # s.xaxis.axes.autoscale(True)
+
                     
                     f.canvas.draw()
                     
@@ -360,12 +351,13 @@ class qViewer(qtw.QWidget):
         self.splitter.addWidget(self.subLayout)
         self.splitter.addWidget(self.subLayout2)
         
-        self.clearPlot_btn = qtw.QPushButton("Clear Plot")
-        self.clearPlot_btn.clicked.connect(plt.cla)
+        # self.clearPlot_btn = qtw.QPushButton("Clear Plot")
+        # self.clearPlot_btn.clicked.connect(plt.cla)
         self.addPixel_btn = qtw.QPushButton("Add Pixel to Profile", clicked=self.announcePixel)
+        self.addPixel_btn.setMaximumWidth(200)
         
 
-        self.pixelButtons.layout().addWidget(self.clearPlot_btn)
+        # self.pixelButtons.layout().addWidget(self.clearPlot_btn)
         self.pixelButtons.layout().addWidget(self.addPixel_btn)
 
         self.v_imageCanvas.draw()
