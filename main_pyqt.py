@@ -6,6 +6,7 @@ from workers import server, Databaser
 from qmanager import qProfileManager
 from qhypbrowser import QHypbrowser
 from qviewer import qViewer
+from qclassifier import qClassifier
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
@@ -39,7 +40,7 @@ class MyWindow(qtw.QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
         self.setGeometry(100, 100, 1300, 900) #top, left, width, height
-        self.version = '0.1'
+        self.version = '1.0'
         self.setWindowTitle('HyperGix Hyperspectral Software ' + self.version)
 
         self.databoy = Databaser()
@@ -91,6 +92,7 @@ class MyWindow(qtw.QMainWindow):
         
         # Populating scan list
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_scans)
+        self.mainNotebook.tab3.nicknameChosen.connect(self.databoy.add_scan)
         # self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
 
@@ -108,6 +110,7 @@ class MyWindow(qtw.QMainWindow):
         # Working with pixel data
         self.mainNotebook.tab2.pixelViewer.pixelListView.itemClicked.connect(self.databoy.report_info_for_pid)
         self.databoy.reportPixelSource.connect(self.mainNotebook.tab2.pixelViewer.findPixel)
+        self.mainNotebook.tab2.reportAverage.connect(self.databoy.update_average_for_material)
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
@@ -125,13 +128,15 @@ class MyNotebook(qtw.QWidget):
         self.tab1 = QHypbrowser(self)
         self.tab2 = qProfileManager()
         self.tab3 = qViewer()
+        self.tab4 = qClassifier()
         self.tabs.resize(300,200)
 
 
         # Add tabs
         self.tabs.addTab(self.tab1, "USGS Search")
-        self.tabs.addTab(self.tab2, "Profile Manager")
+        self.tabs.addTab(self.tab2, "Spectra Manager")
         self.tabs.addTab(self.tab3, "Image Viewer")
+        self.tabs.addTab(self.tab4, "Classifier")
 
 
         # Add tabs to widget

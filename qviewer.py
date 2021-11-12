@@ -136,9 +136,6 @@ class MyMouseHandler(ImageViewMouseHandler):
                     self.lastpixel = {"row": r, "col": c}
                     print(self.lastpixel, '\n\n', subimage)
                     
-
-                    
-
 class NavigationToolbar(NavigationToolbar2QT):
     # only display the buttons we need
     toolitems = [t for t in NavigationToolbar2QT.toolitems if
@@ -172,6 +169,7 @@ class qViewer(qtw.QWidget):
 
     readyForData = qtc.pyqtSignal()
     lastPixel_sig = qtc.pyqtSignal(str, int, int, str)
+    nicknameChosen = qtc.pyqtSignal(str, str)
 
     def populateScans(self, scans):
         print('scans received:', scans)
@@ -192,13 +190,21 @@ class qViewer(qtw.QWidget):
         filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], filename)
         self.sourcename = filename
 
-        # Raster header file
-        h_filename = item + '.hdr'
-        h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
+        if os.path.exists(filepath):
+            # file is a normal hyperion file with .hdr header file
+            h_filename = item + '.hdr'
+            h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
 
-        img = envi.open(h_filepath, filepath)
+            img = envi.open(h_filepath, filepath)
+            
+        else:
+            # file was imported and path has to be queried from db
+            
+        
         desc = gdal.Info(filepath)
         desc = desc.split('Band 1 Block')[0]
+
+        
         # print('\n'+desc)
         
         self.properties_text.setText(str(img).replace('\t', ''))
@@ -227,6 +233,92 @@ class qViewer(qtw.QWidget):
             mat = item
             self.lastPixel_sig.emit(source, r, c, mat)
 
+    def importFile(self):
+        dlg = qtw.QFileDialog()
+        dlg.setWindowTitle('Import a Hyperspectral Image')
+        dlg.setFileMode(qtw.QFileDialog.ExistingFile)
+        dlg.setNameFilter("Hyperspectral files (*.hdr *.L1R *.lan *.tif *.hd5);;All files (*.*)")
+        filename = None
+        
+        if dlg.exec_() == qtw.QDialog.Accepted:
+            filename = dlg.selectedFiles()
+
+        if filename:
+
+            filename = str(filename[0])
+            print(filename)
+            fileFormat = filename[-3:]
+            parts = filename.split('/')
+            i = len(parts) -1
+            fileID = parts[i].replace(f'.{fileFormat}', '')
+            print('\n')
+
+            try:
+                if fileFormat == 'lan':
+                    
+                    img = s.open_image(filename)
+                    bandLimit = img.nbands
+                    print('\n',img) 
+                    nickname, ok = qtw.QInputDialog.getText(self, 'Enter a Nickname', 'Would you like to enter a nickname for this file for easier reference?:')
+                    if ok:
+                        self.nicknameChosen.emit(filename, nickname)
+                        self.downloadList.addItem(f'{fileID} ({nickname})')
+                    else:
+                        self.nicknameChosen.emit(filename, 'None')
+                        self.downloadList.addItem(f'{fileID}')
+
+                    
+
+
+                elif fileFormat == 'hdr':
+                    print('Processing ENVI hdr file...')
+                    print('Please wait...')
+                    img = envi.open(filename)
+                    print('\n', img)
+                         
+                elif fileFormat == 'img': 
+                    print('Processing img file...')
+                    print('Please wait...')
+                    img = envi.open(filename.replace('.img', '.hdr'), filename)
+                    bandLimit = img.nbands
+                    print('\n',img) 
+                        
+                elif fileFormat == 'tif' or fileFormat == 'img':
+                    print('Processing TIF file...')
+                    print('Please wait...')
+                    img = gdal.Open(filename) 
+                    bandLimit = img.RasterCount
+                    
+                    print('Rows:    ', img.RasterXSize)
+                    print('Samples: ', img.RasterYSize)
+                    print('Bands:   ', img.RasterCount)
+                    
+                    if os.path.exists(filename[:-3] + 'lan'):
+                        print('\nThis GeoTiff has already been converted to a LAN file. Skipping conversion...')
+                        dst_filename = filename[:-3] + 'lan'
+                        img = s.open_image(dst_filename)
+                    else:
+                        print('Converting GeoTiff file to LAN for use with Spectral Python')
+                        dst_filename = filename[:-3] + 'lan'
+                        gdal.UseExceptions()
+                        print('Please wait, this may take a few mins...')
+                        gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
+                        img = s.open_image(dst_filename)
+                    
+                    print('\n',img) 
+                        
+                        
+                else: #if not acceptable file type go here
+                    print(fileFormat, 'is not an accepted filetype yet')
+                    qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {fileFormat} is not an accepted filetype yet')
+                    # img = envi.open(h_filepath, filepath)
+                    # with open(filename, 'r') as fh:
+                    #     print(fh.read())
+
+            except Exception as e:
+                print('ERROR:', e)
+                qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {e}')
+
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -249,7 +341,7 @@ class qViewer(qtw.QWidget):
         self.downloadList.setFixedWidth(230)
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
         self.downloadList.itemDoubleClicked.connect(self.openTiffFromList)
-        self.open_btn = qtw.QPushButton("Import GeoTiff")
+        self.open_btn = qtw.QPushButton("Import GeoTiff", clicked=self.importFile)
         self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
 
         self.properties_label = qtw.QLabel("File Properties")

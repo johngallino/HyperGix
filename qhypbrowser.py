@@ -6,6 +6,7 @@ import workers as w
 from workers import server
 from ast import literal_eval 
 from urllib.request import urlopen 
+from PyQt5 import QtWebEngineWidgets as qtwe
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc

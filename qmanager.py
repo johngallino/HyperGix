@@ -122,7 +122,7 @@ class qProfileManager(qtw.QFrame):
     readyForMaterials = qtc.pyqtSignal()
     pixelsPlease = qtc.pyqtSignal(str)
     deleteThisPid = qtc.pyqtSignal(str)
-    calcAvgPls = qtc.pyqtSignal(str)
+    reportAverage = qtc.pyqtSignal(str, list)
 
     def populateMaterials(self, materials):
         print('materials received:', materials)
@@ -133,10 +133,6 @@ class qProfileManager(qtw.QFrame):
     def requestPixels(self, item):
         material = item.text()
         self.pixelsPlease.emit(material)
-
-    def requestAverage(self, item):
-        item = item.text()
-        self.calcAvgPls.emit(item)
 
     def plotProfile(self, pixelList, bandcount):
         """ Receives a list of pixel data and plots it in the viewer tab """
@@ -182,6 +178,7 @@ class qProfileManager(qtw.QFrame):
             self.plot1.set_xlabel("Wavelength")
             self.canvas.draw()
             
+            self.reportAverage.emit(material, avg)
             # self.deletePixelButton.show()
 
         else:
@@ -273,8 +270,6 @@ class qProfileManager(qtw.QFrame):
                
 
         self.profileList.itemDoubleClicked.connect(self.requestPixels)
-        self.profileList.itemDoubleClicked.connect(self.requestAverage)
-
         
         ### Profile Details
         self.pixelLabel = qtw.QLabel("0<br>pixels")
@@ -316,4 +311,5 @@ class qProfileManager(qtw.QFrame):
         self.deletePixelButton.hide()
 
         self.readyForMaterials.emit()
+        # self.requestPixels(self.profileList.setCurrentItem())
         
