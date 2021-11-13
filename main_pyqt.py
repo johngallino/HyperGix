@@ -96,6 +96,10 @@ class MyWindow(qtw.QMainWindow):
         # self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
 
+        # Opening external files
+        self.mainNotebook.tab3.requestFilepath.connect(self.databoy.report_data_for_fileID)
+        self.databoy.reportFilepath.connect(self.mainNotebook.tab3.openExternalScan)
+
         # Storing row and col of last pixel clicked
         self.mainNotebook.tab3.lastPixel_sig.connect(self.databoy.add_pixel)
 

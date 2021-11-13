@@ -1,6 +1,7 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
 from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive, ParentViewPanCallback
+from spectral.io import aviris
 import spectral.io.envi as envi
 import os
 import matplotlib.patches as patches
@@ -13,7 +14,6 @@ from brokenaxes import brokenaxes
 from osgeo import gdal
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
 from os.path import exists
-
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
@@ -23,17 +23,19 @@ from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 
 gdal.UseExceptions()
 
+
 class MyImageView(ImageView):
-    def __init__(self, data=None, bands=None, classes=None, source=None,
+    def __init__(self, data=None, bands=None, classes=None, source=None, brokenaxes=True,
                  **kwargs):
                  ImageView.__init__(self, data, bands, classes, source,
                  **kwargs)
+                 self.broken = brokenaxes
 
     lastPixel = {"row": 0, "col": 0}
-
+    
     def show(self, mode=None, fignum=None):
         super().show(mode, fignum)
-        self.cb_mouse = MyMouseHandler(self, self.lastPixel)
+        self.cb_mouse = MyMouseHandler(self, self.broken)
         self.cb_mouse.connect()
         # self.cb_mouse.show_events = True
 
@@ -81,11 +83,19 @@ class MyImageView(ImageView):
         # return view
 
 class MyMouseHandler(ImageViewMouseHandler):
-    def __init__(self, view, *args, **kwargs):
+    def __init__(self, view, broken, *args, **kwargs):
         super(MyMouseHandler, self).__init__(view)
         self.filteredBandList = []
-        
-        for i in range(len(self.view.source.bands.centers)):
+        self.brokenaxes = broken
+        print('Broken Axes is:', self.brokenaxes)
+        if self.view.source.bands.centers:
+            bandcount = len(self.view.source.bands.centers)
+        elif self.view.source.nbands:
+            bandcount = self.view.source.nbands
+        else:
+            bandcount = self.view.source.shape[2]
+            
+        for i in range(bandcount):
             if i not in range(57, 78):
                 self.filteredBandList.append(i)
         
@@ -117,11 +127,22 @@ class MyMouseHandler(ImageViewMouseHandler):
                         f = plt.figure()
                         self.view.spectrum_plot_fig_id = f.number
                     f.clf()
-                    s = brokenaxes(xlims=((400, 915), (932, 2500)), hspace=.01, wspace=.04)
-                    x = np.linspace(400, 2500, 221)
-                    subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
-                    s.plot(x, subimage)
-                    s.set_xlabel('Wavelength')
+                    if self.brokenaxes:
+                        s = brokenaxes(xlims=((400, 915), (932, 2500)), hspace=.01, wspace=.04)
+                        x = np.linspace(400, 2500, len(self.filteredBandList))
+                        subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
+                        s.plot(x, subimage)
+                        s.set_xlabel('Wavelength')
+                    else:
+                        s = f.gca()
+                        settings.plotter.plot(self.view.source[r, c],
+                                            self.view.source)
+                        s.xaxis.axes.relim()
+                        s.xaxis.axes.autoscale(True)
+                        s.set_xlabel('Band')
+                        subimage = self.view.source.read_pixel(r, c)
+                    
+                    
                     # s.set_ylabel('Reflectance')
                     try:
                         s.set_title(f'Pixel({r},{c}) Spectra')
@@ -170,6 +191,8 @@ class qViewer(qtw.QWidget):
     readyForData = qtc.pyqtSignal()
     lastPixel_sig = qtc.pyqtSignal(str, int, int, str)
     nicknameChosen = qtc.pyqtSignal(str, str)
+    requestFilepath = qtc.pyqtSignal(str)
+    switchToLAN = qtc.pyqtSignal(str)
 
     def populateScans(self, scans):
         print('scans received:', scans)
@@ -180,8 +203,65 @@ class qViewer(qtw.QWidget):
         print('materials received:', materials)
         self.materials = materials
 
-    def openTiffFromList(self, item):
-        """ Processes and opens a GeoTiff image in the viewer """
+    def openExternalScan(self, filepath):
+        """ Receives a filepath from the db and loads it in the viewer window.
+        
+            First it will try opening with spectral python.
+            If that doesn't work, it will try opening explicitly as an aviris file.
+            If that doesn't work, it will look for a similarly-named LAN file to open
+            If that doesn't work, it will try to convert the GeoTiff into a LAN file to open
+            If that doesn't work, it gives up and delivers an error 
+
+        """
+        
+        try:
+            img = s.open_image(filepath)
+        except Exception as e:
+            try:
+                img = aviris.open(filepath)
+            except:
+                try:
+                    dst_filename = filepath[:-3] + 'lan'
+
+                    if os.path.exists(dst_filename):
+                        img = s.open_image(dst_filename)
+                    else:
+                        img = gdal.Open(filepath)
+                        print('Converting GeoTiff file to LAN for use with Spectral Python')
+                        gdal.UseExceptions()
+                        print('Please wait, this may take a few moments...')
+                        gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
+
+                        try:
+                            img = s.open_image(dst_filename)
+                            self.switchToLAN.emit(filepath) # <---- not wired up yet
+                        except:
+                            qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {filepath}\n{e}')
+                            return
+                
+                except:
+                    qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {filepath}\n{e}')
+                    return
+
+        desc = gdal.Info(filepath)
+        desc = desc.split('Band 1 Block')[0]
+
+        self.properties_text.setText(str(img).replace('\t', ''))
+        self.properties_text.append(desc)
+
+        self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img, brokenaxes=False)
+        self.view.spectrum_plot_fig_id = 4
+        
+        self.view.show(mode='data', fignum=3)
+        plt.tight_layout()
+        print(self.view.lastPixel)
+        
+        self.v_imageCanvas.draw()
+        self.v_spectraCanvas.draw()
+
+
+    def openHyperionFromList(self, item):
+        """ Processes and opens a Hyperion image in the viewer """
         self.v_fig.clf()
         
         # Raster image
@@ -199,14 +279,12 @@ class qViewer(qtw.QWidget):
             
         else:
             # file was imported and path has to be queried from db
-            
+            self.requestFilepath.emit(item)
+            return
         
         desc = gdal.Info(filepath)
         desc = desc.split('Band 1 Block')[0]
 
-        
-        # print('\n'+desc)
-        
         self.properties_text.setText(str(img).replace('\t', ''))
         self.properties_text.append(desc)
         self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
@@ -259,17 +337,7 @@ class qViewer(qtw.QWidget):
                     img = s.open_image(filename)
                     bandLimit = img.nbands
                     print('\n',img) 
-                    nickname, ok = qtw.QInputDialog.getText(self, 'Enter a Nickname', 'Would you like to enter a nickname for this file for easier reference?:')
-                    if ok:
-                        self.nicknameChosen.emit(filename, nickname)
-                        self.downloadList.addItem(f'{fileID} ({nickname})')
-                    else:
-                        self.nicknameChosen.emit(filename, 'None')
-                        self.downloadList.addItem(f'{fileID}')
-
-                    
-
-
+       
                 elif fileFormat == 'hdr':
                     print('Processing ENVI hdr file...')
                     print('Please wait...')
@@ -283,31 +351,35 @@ class qViewer(qtw.QWidget):
                     bandLimit = img.nbands
                     print('\n',img) 
                         
-                elif fileFormat == 'tif' or fileFormat == 'img':
+                elif fileFormat == 'tif':
                     print('Processing TIF file...')
                     print('Please wait...')
-                    img = gdal.Open(filename) 
-                    bandLimit = img.RasterCount
-                    
-                    print('Rows:    ', img.RasterXSize)
-                    print('Samples: ', img.RasterYSize)
-                    print('Bands:   ', img.RasterCount)
-                    
-                    if os.path.exists(filename[:-3] + 'lan'):
-                        print('\nThis GeoTiff has already been converted to a LAN file. Skipping conversion...')
-                        dst_filename = filename[:-3] + 'lan'
-                        img = s.open_image(dst_filename)
-                    else:
-                        print('Converting GeoTiff file to LAN for use with Spectral Python')
-                        dst_filename = filename[:-3] + 'lan'
-                        gdal.UseExceptions()
-                        print('Please wait, this may take a few mins...')
-                        gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
-                        img = s.open_image(dst_filename)
-                    
-                    print('\n',img) 
+
+                    try:
+                        img = s.open_image(filename)
+                        print('\n',img) 
+                    except Exception as e:
+                        print(f'Error with file: {filename}\n{e}\n')
+                        img = gdal.Open(filename) 
+                        bandLimit = img.RasterCount
                         
-                        
+                        print('Rows:    ', img.RasterXSize)
+                        print('Samples: ', img.RasterYSize)
+                        print('Bands:   ', img.RasterCount)
+                    
+                    # if os.path.exists(filename[:-3] + 'lan'):
+                    #     print('\nThis GeoTiff has already been converted to a LAN file. Skipping conversion...')
+                    #     dst_filename = filename[:-3] + 'lan'
+                    #     img = s.open_image(dst_filename)
+                    # else:
+                    #     print('Converting GeoTiff file to LAN for use with Spectral Python')
+                    #     dst_filename = filename[:-3] + 'lan'
+                    #     gdal.UseExceptions()
+                    #     print('Please wait, this may take a few mins...')
+                    #     gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
+                    #     img = s.open_image(dst_filename)
+                    
+ 
                 else: #if not acceptable file type go here
                     print(fileFormat, 'is not an accepted filetype yet')
                     qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {fileFormat} is not an accepted filetype yet')
@@ -318,6 +390,15 @@ class qViewer(qtw.QWidget):
             except Exception as e:
                 print('ERROR:', e)
                 qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {e}')
+
+            else:
+                nickname, ok = qtw.QInputDialog.getText(self, 'Enter a Nickname', 'Would you like to enter a nickname for this file for easier reference?:')
+                if ok:
+                    self.nicknameChosen.emit(filename, nickname)
+                    self.downloadList.addItem(f'{fileID} ({nickname})')
+                else:
+                    self.nicknameChosen.emit(filename, 'None')
+                    self.downloadList.addItem(f'{fileID}')
 
 
     def __init__(self, *args, **kwargs):
@@ -340,7 +421,7 @@ class qViewer(qtw.QWidget):
         self.downloadList = qtw.QListWidget()
         self.downloadList.setFixedWidth(230)
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
-        self.downloadList.itemDoubleClicked.connect(self.openTiffFromList)
+        self.downloadList.itemDoubleClicked.connect(self.openHyperionFromList)
         self.open_btn = qtw.QPushButton("Import GeoTiff", clicked=self.importFile)
         self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
 
