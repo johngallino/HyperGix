@@ -25,6 +25,9 @@ class Databaser(qtw.QWidget):
     reportPixels = qtc.pyqtSignal(list, int)
     reportPixelSource = qtc.pyqtSignal(str, int, int)
     reportFilepath = qtc.pyqtSignal(str)
+    delScanSuccess = qtc.pyqtSignal(str)
+    delProfileSuccess = qtc.pyqtSignal(str)
+
 
     def report_scans(self):
         scans = self.pull_scans()
@@ -94,7 +97,6 @@ class Databaser(qtw.QWidget):
             present = True
             print(f'{id} already in database')
 
-        
         def infoSearch(file, term, datalength):
             ''' use this method to pull data from gdal.info '''
             if file.find(term) != -1:
@@ -151,7 +153,7 @@ class Databaser(qtw.QWidget):
 
         if not present:
 
-            if os.path.isdir(f'{config.HYPERION_SCANS_PATH}\{id})'):
+            if os.path.isdir(os.path.join(config.HYPERION_SCANS_PATH, id)):
                 filepath = os.path.join(config.HYPERION_SCANS_PATH, id, f'{id}.{fileFormat}')
                 info = gdal.Info(filepath).split('Corner ')[0]
                 print(info)
@@ -400,6 +402,93 @@ class Databaser(qtw.QWidget):
             present = True
             print(f'That material is already in the database')
 
+    def change_scan_filepath_to_lan(self, path):
+        newpath = path.replace('.tif', '.lan')
+        query = qts.QSqlQuery(self.db)
+        query.prepare('UPDATE scans SET filepath = :newpath WHERE filepath = :path')
+        query.bindValue(':path', path)
+        query.bindvalue(':newpath', newpath)
+
+        good = query.exec_()
+        if good:
+            print(f'\n{path} updated to {newpath}')
+                #send signal to add to the list
+        else:
+            print('SCAN FILEPATH NOT UPDATED!\n', query.lastError().text())
+
+    def delete_Scan(self, scanID):
+        ''' given a scan ID, deletes the file and removes from db'''
+        ##### UNCOMMENT TO ACTUALLY DELETE FILES ####
+
+        # query1 = qts.QSqlQuery(self.db)
+        # query1.prepare('SELECT filepath from scans where id = :scanID')
+        # query1.bindValue(':scanID', scanID)
+        # good = query1.exec_()
+
+        # if good:
+        #     query1.next()
+        #     filepath = query1.value(0)
+        #     if '\\' in filepath:
+        #         parts = filepath.split('\\')
+        #     else:
+        #         parts = filepath.split('/')
+
+        #     query1 = qts.QSqlQuery(self.db)
+        #     query1.prepare('DELETE from scans where filepath = :filepath')
+        #     query1.bindValue(':filepath', filepath)
+        #     good = query1.exec_()
+
+            # if good:
+
+                # print(f'{scanID} deleted from db')
+        self.delScanSuccess.emit(scanID)
+
+            # else:
+                # print('ERROR!\n', query1.lastError().text())     
+                
+        
+            # filename = parts[len(parts) - 1]
+            # print(filename)
+            # if filename[:-4] == parts[len(parts)-2]:
+            #     import shutil
+            #     directory = filepath.replace(filename, '')[:-1]
+            #     try:
+            #         shutil.rmtree(directory)
+            #         print(directory, 'deleted from system')
+            #     except Exception as e:
+            #         print(e)
+            #         qtw.QMessageBox.critical(
+            #             None, 'Cannot Delete',
+            #             'Could not delete: ',
+            #             f'{e}')
+                
+            # else:
+            #     try:
+            #         os.remove(filepath)
+            #         print(filepath, 'deleted from system')
+            #     except Exception as e:
+            #         print(e)
+            #         qtw.QMessageBox.critical(
+            #             None, 'Cannot Delete',
+            #             'Could not delete: ',
+            #             f'{e}')
+        # else:
+        #     print('ERROR!\n', query1.lastError().text()) 
+
+    def delete_Profile(self, profile):
+        ''' given a profile name, deletes it from db'''
+        
+        query1 = qts.QSqlQuery(self.db)
+        query1.prepare('DELETE from materials where name = :profile')
+        query1.bindValue(':profile', profile)
+        good = query1.exec_()
+
+        if good:
+            print(f'{profile} deleted from db')
+            self.delProfileSuccess.emit(profile)
+        else:
+            print('ERROR!\n', query1.lastError().text()) 
+    
     def report_pixels_for_material(self, name):
 
         ''' queries the database for all pixels belonging to a material '''

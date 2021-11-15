@@ -13,6 +13,7 @@ matplotlib.use('Qt5Agg')
 from brokenaxes import brokenaxes
 from osgeo import gdal
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
+from matplotlib.backend_bases import NavigationToolbar2
 from os.path import exists
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
@@ -162,6 +163,11 @@ class NavigationToolbar(NavigationToolbar2QT):
     toolitems = [t for t in NavigationToolbar2QT.toolitems if
                  t[0] in ('Home', 'Back', 'Forward', 'Pan', 'Zoom', 'Save')]
 
+    # def __init__(self, canvas, parent, coordinates=True):
+    #     super().__init__(canvas, parent, coordinates=True)
+
+   
+
 class MaterialDialog(qtw.QWidget):
     def __init__(self, materials, parent = None):
         super(MaterialDialog, self).__init__(parent)
@@ -193,6 +199,19 @@ class qViewer(qtw.QWidget):
     nicknameChosen = qtc.pyqtSignal(str, str)
     requestFilepath = qtc.pyqtSignal(str)
     switchToLAN = qtc.pyqtSignal(str)
+    signal_delete = qtc.pyqtSignal(str)
+
+    def deleteScan(self):
+        item = self.downloadList.currentItem()
+        item = item.text().split(' ')[0]
+        print('current item is', item)
+        self.signal_delete.emit(item)
+
+    def remove_scan_from_list(self, name):
+        items_list = self.downloadList.findItems(name, qtc.Qt.MatchStartsWith)
+        for item in items_list:
+            r = self.downloadList.row(item)
+            self.downloadList.takeItem(r)
 
     def populateScans(self, scans):
         print('scans received:', scans)
@@ -400,6 +419,9 @@ class qViewer(qtw.QWidget):
                     self.nicknameChosen.emit(filename, 'None')
                     self.downloadList.addItem(f'{fileID}')
 
+    def bandValueChanged(self, value):
+            value = str(value)
+            self.bandLabel.setText(value)
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -414,7 +436,7 @@ class qViewer(qtw.QWidget):
 
         #Left Frame
         self.leftFrame = qtw.QVBoxLayout()
-        self.dl_label = qtw.QLabel("<b>Downloads</b>")
+        self.dl_label = qtw.QLabel("<b>Scan Library</b>")
         self.dl_label.setAlignment(qtc.Qt.AlignCenter)
         self.dl_label.setFont(qtg.QFont('Arial', 12))
 
@@ -422,8 +444,10 @@ class qViewer(qtw.QWidget):
         self.downloadList.setFixedWidth(230)
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
         self.downloadList.itemDoubleClicked.connect(self.openHyperionFromList)
+
         self.open_btn = qtw.QPushButton("Import GeoTiff", clicked=self.importFile)
-        self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
+        self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
+        # self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
 
         self.properties_label = qtw.QLabel("File Properties")
         self.properties_text = qtw.QTextBrowser()
@@ -432,7 +456,8 @@ class qViewer(qtw.QWidget):
         
         self.leftFrame.addWidget(self.dl_label)
         self.leftFrame.addWidget(self.downloadList)
-        self.leftFrame.addWidget(self.open_btn, )
+        self.leftFrame.addWidget(self.open_btn)
+        self.leftFrame.addWidget(self.del_btn)
         self.leftFrame.addWidget(self.properties_label)
         self.leftFrame.addWidget(self.properties_text)
 
@@ -462,20 +487,23 @@ class qViewer(qtw.QWidget):
                     if not exists(old_header):
                         # Making a new copy of header with corrected offset of 2502
                         print(f'Corrected header not found for {name}. Creating it now...')
-                        os.rename(header, old_header)
-                        shutil.copyfile(old_header, header)
+                        try:
+                            os.rename(header, old_header)
+                            shutil.copyfile(old_header, header)
+                            file = open(header, 'r')
+                            replacement = ""
+                            for line in file:
+                                line = line.strip()
+                                changes = line.replace("header offset = 0", "header offset = 2502")
+                                replacement = replacement + changes + "\n"
+                            file.close()
 
-                        file = open(header, 'r')
-                        replacement = ""
-                        for line in file:
-                            line = line.strip()
-                            changes = line.replace("header offset = 0", "header offset = 2502")
-                            replacement = replacement + changes + "\n"
-                        file.close()
-
-                        fout = open(header, 'w')
-                        fout.write(replacement)
-                        fout.close()
+                            fout = open(header, 'w')
+                            fout.write(replacement)
+                            fout.close()
+                        except:
+                            print('Could not create corrected header file. Maybe .hdr file is missing?')
+                            pass
 
         # Mid frame
         self.v_midframe = qtw.QWidget()
@@ -490,18 +518,67 @@ class qViewer(qtw.QWidget):
         self.subLayout = qtw.QWidget()
         # self.subLayout.setStyleSheet("background-color:red;")
         self.subLayout.setLayout(qtw.QVBoxLayout())
+        self.subLayout.setMinimumWidth(320)
+        
+        self.imageHolder = qtw.QWidget()
 
         self.subLayout2 = qtw.QWidget()
         # self.subLayout2.setStyleSheet("background-color:blue;")
         self.subLayout2.setLayout(qtw.QVBoxLayout())
+
+        self.viewStyleLayout = qtw.QWidget()
+
+        # RGB Controls
+        self.viewRGBlayout = qtw.QWidget()
+        self.viewRGBlayout.setLayout(qtw.QHBoxLayout())
+        self.viewRGBlayout.layout().addWidget(qtw.QLabel('R:'))
+        r_entry = qtw.QLineEdit()
+        r_entry.setText('50')
+        r_entry.setFixedWidth(30)
+        self.viewRGBlayout.layout().addWidget(r_entry)
+        self.viewRGBlayout.layout().addWidget(qtw.QLabel('G:'))
+        g_entry = qtw.QLineEdit()
+        g_entry.setText('27')
+        g_entry.setFixedWidth(30)
+        self.viewRGBlayout.layout().addWidget(g_entry)
+        self.viewRGBlayout.layout().addWidget(qtw.QLabel('B:'))
+        b_entry = qtw.QLineEdit()
+        b_entry.setText('17')
+        b_entry.setFixedWidth(30)
+        self.viewRGBlayout.layout().addWidget(b_entry)
+        self.viewRGBlayout.layout().addStretch()
+        self.viewRGBlayout.layout().addWidget(qtw.QPushButton('Single Band View'))
+
+        # Single Band Controls
+        self.viewSingleBandlayout = qtw.QWidget()
+        self.viewSingleBandlayout.setLayout(qtw.QHBoxLayout())
+        self.bandSlider = qtw.QSlider(qtc.Qt.Horizontal)
+        self.bandSlider.setMinimum(1)
+        self.bandSlider.setMaximum(250)
+        self.bandSlider.setSingleStep(1)
+        self.bandSlider.setValue(50)
+        self.bandSlider.setTickInterval(10)
+        self.bandSlider.setTickPosition(qtw.QSlider.TicksBelow)
+        self.bandSlider.setMinimumWidth(200)
+        self.bandLabel = qtw.QLabel(str(self.bandSlider.value()))
+        self.bandLabel.setMinimumWidth(30)
+        self.viewSingleBandlayout.layout().addWidget(self.bandLabel)
+        self.viewSingleBandlayout.layout().addWidget(self.bandSlider)
+        self.viewSingleBandlayout.layout().addStretch()
+        self.viewSingleBandlayout.layout().addWidget(qtw.QPushButton('RGB View'))
+        self.bandSlider.valueChanged.connect(self.bandValueChanged)
+
        
         self.v_fig = plt.figure(figsize=(1,5), dpi=80)
         self.s_fig = plt.figure(figsize=(6,5))
 
-        print('v_fig number:', self.v_fig.number)
-        print('s_fig number:', self.s_fig.number)
+        # print('v_fig number:', self.v_fig.number)
+        # print('s_fig number:', self.s_fig.number)
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
+        self.imageHolder.setLayout(qtw.QVBoxLayout())
+        self.imageHolder.layout().addWidget(self.v_imageCanvas)
+        self.imageHolder.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
         self.v_spectraCanvas = FigureCanvasQTAgg(self.s_fig)
         self.v_canvas_nav = NavigationToolbar(self.v_imageCanvas, self.v_midframe)
 
@@ -518,7 +595,9 @@ class qViewer(qtw.QWidget):
 
         self.layout.addWidget(self.v_midframe)
         self.subLayout.layout().addWidget(self.v_canvas_nav)
-        self.subLayout.layout().addWidget(self.v_imageCanvas)
+        self.subLayout.layout().addWidget(self.imageHolder)
+        self.subLayout.layout().addWidget(self.viewRGBlayout)
+        self.subLayout.layout().addWidget(self.viewSingleBandlayout)
         self.subLayout2.layout().addWidget(self.v_spectraCanvas)
         self.subLayout2.layout().addWidget(self.pixelButtons)
         self.splitter.addWidget(self.subLayout)

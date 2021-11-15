@@ -93,8 +93,12 @@ class MyWindow(qtw.QMainWindow):
         # Populating scan list
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_scans)
         self.mainNotebook.tab3.nicknameChosen.connect(self.databoy.add_scan)
-        # self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
+        self.mainNotebook.tab3.switchToLAN.connect(self.databoy.change_scan_filepath_to_lan)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
+
+        # Deleting a scan
+        self.mainNotebook.tab3.signal_delete.connect(self.databoy.delete_Scan)
+        self.databoy.delScanSuccess.connect(self.mainNotebook.tab3.remove_scan_from_list)
 
         # Opening external files
         self.mainNotebook.tab3.requestFilepath.connect(self.databoy.report_data_for_fileID)
@@ -110,6 +114,10 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.mainNotebook.tab2.pixelsPlease.connect(self.databoy.report_pixels_for_material)
         self.databoy.reportPixels.connect(self.mainNotebook.tab2.plotProfile)
+
+        # Deleting a material profile
+        self.mainNotebook.tab2.deleteThisPid.connect(self.databoy.delete_Profile)
+        self.databoy.delProfileSuccess.connect(self.mainNotebook.tab2.remove_profile_from_list)
 
         # Working with pixel data
         self.mainNotebook.tab2.pixelViewer.pixelListView.itemClicked.connect(self.databoy.report_info_for_pid)

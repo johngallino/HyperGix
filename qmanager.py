@@ -218,6 +218,11 @@ class qProfileManager(qtw.QFrame):
             badPixel = item
             self.deleteThisPid.emit(badPixel)
 
+    def deleteProfile(self):
+        item = self.profileList.currentItem()
+        item = item.text()
+        self.deleteThisPid.emit(item)
+
     def profilePop(self):
         """ Pops up a modal window for creating a new profile """
         self.profilePop = qtw.QDialog()
@@ -239,6 +244,12 @@ class qProfileManager(qtw.QFrame):
         self.profileList.addItem(name)
         print(f'{name} profile added to db')
 
+    def remove_profile_from_list(self, name):
+        items_list = self.profileList.findItems(name, qtc.Qt.MatchExactly)
+        for item in items_list:
+            r = self.profileList.row(item)
+            self.profileList.takeItem(r)
+    
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.TARGET_BANDS = [8, 13, 15, 25, 55, 77, 82, 85, 91, 93, 97, 102, 112, 115, 120, 137, 158, 183]
@@ -262,7 +273,7 @@ class qProfileManager(qtw.QFrame):
         self.addProfileButton = qtw.QPushButton("Create New Profile", clicked=self.profilePop)
         self.layout.addWidget(self.addProfileButton, 2, 0)
 
-        self.delProfileButton = qtw.QPushButton('Delete Profile')
+        self.delProfileButton = qtw.QPushButton('Delete Profile', clicked=self.deleteProfile)
         self.layout.addWidget(self.delProfileButton, 3, 0)
         
         self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
