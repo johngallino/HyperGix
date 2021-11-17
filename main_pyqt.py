@@ -148,7 +148,7 @@ class MyNotebook(qtw.QWidget):
         self.tabs.addTab(self.tab1, "USGS Search")
         self.tabs.addTab(self.tab2, "Spectra Manager")
         self.tabs.addTab(self.tab3, "Image Viewer")
-        self.tabs.addTab(self.tab4, "Classifier")
+        # self.tabs.addTab(self.tab4, "Classifier")
 
 
         # Add tabs to widget

@@ -101,12 +101,24 @@ class PixelViewer(qtw.QFrame):
         self.ax1.set_axis_off()
         name = source.replace('.L1R', '')[-22:]
         self.pixelDetailLabel.setText(f'{name}\nRow: {r}\nCol: {c}')
-        img = envi.open(source.replace('.L1R', '.hdr'), source)
-        self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)        
-        # self.view.show(fignum=1)
-        # self.view.pan_to(r,c)
-        self.view.open_zoom(center=(r,c), size=65, fignum=2)
-        # self.view.axes.add_patch(patches.Rectangle((r,c), 2, 2, linewidth=1, facecolor='none'))
+        try:
+            img = envi.open(source.replace('.L1R', '.hdr'), source)
+            self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)        
+            self.view.open_zoom(center=(r,c), size=65, fignum=2)
+
+        except Exception as e:
+            print(e)
+            fig = self.v_fig
+            ax = fig.add_subplot()
+            fig.subplots_adjust(top=0.85)
+            ax.axis([0, 10, 0, 10])
+            ax.text(2, 5, r'Missing Scan', fontsize=7)
+
+            ax.set_axis_off()
+            
+            
+
+        
 
         self.v_imageCanvas.draw()
         

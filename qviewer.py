@@ -78,9 +78,6 @@ class MyImageView(ImageView):
             self.pan_to(*center)
             self.axes.add_patch(patches.Rectangle((center[1]-1, center[0]-1), 2, 2, linewidth=1, edgecolor='w', facecolor='none'))
             
-            
-            # self.axes.add_patch(patches.Rectangle((0, 0), 3, 3, linewidth=1, edgecolor='w', facecolor='none'))
-
         # return view
 
 class MyMouseHandler(ImageViewMouseHandler):
@@ -88,7 +85,7 @@ class MyMouseHandler(ImageViewMouseHandler):
         super(MyMouseHandler, self).__init__(view)
         self.filteredBandList = []
         self.brokenaxes = broken
-        print('Broken Axes is:', self.brokenaxes)
+        # print('Broken Axes is:', self.brokenaxes)
         if self.view.source.bands.centers:
             bandcount = len(self.view.source.bands.centers)
         elif self.view.source.nbands:
@@ -134,6 +131,16 @@ class MyMouseHandler(ImageViewMouseHandler):
                         subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
                         s.plot(x, subimage)
                         s.set_xlabel('Wavelength')
+                        s.set_ylabel('Reflectance')
+
+                        # RGB Legend Overlay
+
+                        s.plot([620, 720],[-300, -300], '-r', linewidth=4, markersize=12)
+                        s.plot([495, 570],[-300, -300], '-g', linewidth=4, markersize=12)
+                        s.plot([450, 495],[-300, -300], '-b', linewidth=4, markersize=12)
+                        s.plot([760, 1400],[-300, -300], '-k', alpha=.3, linewidth=4, markersize=12)
+                        
+                        
                     else:
                         s = f.gca()
                         settings.plotter.plot(self.view.source[r, c],
@@ -141,6 +148,7 @@ class MyMouseHandler(ImageViewMouseHandler):
                         s.xaxis.axes.relim()
                         s.xaxis.axes.autoscale(True)
                         s.set_xlabel('Band')
+                        s.set_ylabel('Reflectance')
                         subimage = self.view.source.read_pixel(r, c)
                     
                     
@@ -279,7 +287,7 @@ class qViewer(qtw.QWidget):
         self.v_spectraCanvas.draw()
 
 
-    def openHyperionFromList(self, item):
+    def openHyperionFromList(self, item, mode='RGB'):
         """ Processes and opens a Hyperion image in the viewer """
         self.v_fig.clf()
         
@@ -295,6 +303,7 @@ class qViewer(qtw.QWidget):
             h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
 
             img = envi.open(h_filepath, filepath)
+            vi = s.ndvi(img, 30, 85)
             
         else:
             # file was imported and path has to be queried from db
@@ -306,12 +315,30 @@ class qViewer(qtw.QWidget):
 
         self.properties_text.setText(str(img).replace('\t', ''))
         self.properties_text.append(desc)
-        self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
-        self.view.spectrum_plot_fig_id = 4
+
+        if mode == 'RGB':
+            
+            self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
+            self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
+
+        elif mode == 'single':
+            
+            self.view = s.imshow(img, (50,50,50), fignum = 3, stretch=(.01, .99), source=img)
+            self.view.spectrum_plot_fig_id = 4
+
+        elif mode == 'NDVI':
+            
+            colors = ["black", "grey", "red", "yellow", "lawngreen"]
+            cmap1 = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", colors)            
+            self.view = s.imshow(vi, fignum = 3, stretch=(.01, .99), cmap=cmap1, source=img)
+            self.view.spectrum_plot_fig_id = 4
+
         
-        self.view.show(mode='data', fignum=3)
+            
+
         plt.tight_layout()
-        print(self.view.lastPixel)
+        # print(self.view.lastPixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
@@ -445,9 +472,9 @@ class qViewer(qtw.QWidget):
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
         self.downloadList.itemDoubleClicked.connect(self.openHyperionFromList)
 
-        self.open_btn = qtw.QPushButton("Import GeoTiff", clicked=self.importFile)
+        self.open_btn = qtw.QPushButton("Import Spectral Scan", clicked=self.importFile)
         self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
-        # self.open_btn.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Preferred)
+        
 
         self.properties_label = qtw.QLabel("File Properties")
         self.properties_text = qtw.QTextBrowser()
@@ -470,8 +497,7 @@ class qViewer(qtw.QWidget):
             print(DOWNLOAD_PATH)
             os.mkdir(DOWNLOAD_PATH)
 
-
-        
+        # Populating scans list and correcting Hyperion header offset error
         for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
             for name in files:
                 if name[-3:] == 'L1R':
@@ -526,7 +552,26 @@ class qViewer(qtw.QWidget):
         # self.subLayout2.setStyleSheet("background-color:blue;")
         self.subLayout2.setLayout(qtw.QVBoxLayout())
 
-        self.viewStyleLayout = qtw.QWidget()
+
+        # View Mode
+        self.VMBox = qtw.QWidget()
+        VMlayout = qtw.QHBoxLayout()
+        self.VMBox.setLayout(VMlayout)
+        self.b1 = qtw.QRadioButton('RGB')
+        self.b1.setChecked(True)
+        self.b1.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='RGB'))
+        VMlayout.addWidget(self.b1)
+
+        self.b2 = qtw.QRadioButton('Single Band')
+        self.b2.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='single'))
+        VMlayout.addWidget(self.b2)
+
+        self.b3 = qtw.QRadioButton('NDVI')
+        self.b3.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='NDVI'))
+        VMlayout.addWidget(self.b3)
+        VMlayout.addStretch()
+
+
 
         # RGB Controls
         self.viewRGBlayout = qtw.QWidget()
@@ -547,7 +592,7 @@ class qViewer(qtw.QWidget):
         b_entry.setFixedWidth(30)
         self.viewRGBlayout.layout().addWidget(b_entry)
         self.viewRGBlayout.layout().addStretch()
-        self.viewRGBlayout.layout().addWidget(qtw.QPushButton('Single Band View'))
+        # self.viewRGBlayout.layout().addWidget(qtw.QPushButton('Single Band View'))
 
         # Single Band Controls
         self.viewSingleBandlayout = qtw.QWidget()
@@ -596,8 +641,9 @@ class qViewer(qtw.QWidget):
         self.layout.addWidget(self.v_midframe)
         self.subLayout.layout().addWidget(self.v_canvas_nav)
         self.subLayout.layout().addWidget(self.imageHolder)
+        self.subLayout.layout().addWidget(self.VMBox)
         self.subLayout.layout().addWidget(self.viewRGBlayout)
-        self.subLayout.layout().addWidget(self.viewSingleBandlayout)
+        # self.subLayout.layout().addWidget(self.viewSingleBandlayout)
         self.subLayout2.layout().addWidget(self.v_spectraCanvas)
         self.subLayout2.layout().addWidget(self.pixelButtons)
         self.splitter.addWidget(self.subLayout)
