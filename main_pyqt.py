@@ -88,6 +88,7 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab1.downloadFinishedB.connect(self.status_bar.showMessage)
         self.mainNotebook.tab1.downloadFinishedB.connect(self.dl_pbar.finishDownload)
         self.mainNotebook.tab1.resultsLoaded.connect(self.status_bar.showMessage)
+        self.mainNotebook.tab3.switchToLAN.connect(lambda: self.status_bar.showMessage('Please wait while the file is converted...'), 5000)
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
         
         # Populating scan list
@@ -95,6 +96,7 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab3.nicknameChosen.connect(self.databoy.add_scan)
         self.mainNotebook.tab3.switchToLAN.connect(self.databoy.change_scan_filepath_to_lan)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
+        self.databoy.addScanSuccess.connect(self.mainNotebook.tab3.downloadList.addItem)
 
         # Deleting a scan
         self.mainNotebook.tab3.signal_delete.connect(self.databoy.delete_Scan)
@@ -145,9 +147,9 @@ class MyNotebook(qtw.QWidget):
 
 
         # Add tabs
-        self.tabs.addTab(self.tab1, "USGS Search")
-        self.tabs.addTab(self.tab2, "Spectra Manager")
         self.tabs.addTab(self.tab3, "Image Viewer")
+        self.tabs.addTab(self.tab2, "Spectra Manager")
+        self.tabs.addTab(self.tab1, "USGS Search")
         # self.tabs.addTab(self.tab4, "Classifier")
 
 

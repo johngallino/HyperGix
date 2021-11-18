@@ -87,13 +87,13 @@ class MyMouseHandler(ImageViewMouseHandler):
         self.brokenaxes = broken
         # print('Broken Axes is:', self.brokenaxes)
         if self.view.source.bands.centers:
-            bandcount = len(self.view.source.bands.centers)
+            self.bandcount = len(self.view.source.bands.centers)
         elif self.view.source.nbands:
-            bandcount = self.view.source.nbands
+            self.bandcount = self.view.source.nbands
         else:
-            bandcount = self.view.source.shape[2]
+            self.bandcount = self.view.source.shape[2]
             
-        for i in range(bandcount):
+        for i in range(self.bandcount):
             if i not in range(57, 78):
                 self.filteredBandList.append(i)
         
@@ -152,7 +152,6 @@ class MyMouseHandler(ImageViewMouseHandler):
                         subimage = self.view.source.read_pixel(r, c)
                     
                     
-                    # s.set_ylabel('Reflectance')
                     try:
                         s.set_title(f'Pixel({r},{c}) Spectra')
                     except:
@@ -205,8 +204,9 @@ class qViewer(qtw.QWidget):
     readyForData = qtc.pyqtSignal()
     lastPixel_sig = qtc.pyqtSignal(str, int, int, str)
     nicknameChosen = qtc.pyqtSignal(str, str)
-    requestFilepath = qtc.pyqtSignal(str)
+    requestFilepath = qtc.pyqtSignal(str, str)
     switchToLAN = qtc.pyqtSignal(str)
+    switchFinished = qtc.pyqtSignal()
     signal_delete = qtc.pyqtSignal(str)
 
     def deleteScan(self):
@@ -230,7 +230,7 @@ class qViewer(qtw.QWidget):
         print('materials received:', materials)
         self.materials = materials
 
-    def openExternalScan(self, filepath):
+    def openExternalScan(self, filepath, mode='RGB'):
         """ Receives a filepath from the db and loads it in the viewer window.
         
             First it will try opening with spectral python.
@@ -260,8 +260,9 @@ class qViewer(qtw.QWidget):
                         gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
 
                         try:
+                            self.switchToLAN.emit(filepath)
                             img = s.open_image(dst_filename)
-                            self.switchToLAN.emit(filepath) # <---- not wired up yet
+                            self.switchFinished.emit()
                         except:
                             qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {filepath}\n{e}')
                             return
@@ -279,15 +280,61 @@ class qViewer(qtw.QWidget):
         self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img, brokenaxes=False)
         self.view.spectrum_plot_fig_id = 4
         
-        self.view.show(mode='data', fignum=3)
+        if mode == 'RGB':
+            
+            self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), source=img)
+            self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
+
+        elif mode == 'single':
+            self.view = MyImageView(img, (50, 50, 50), stretch=((.01, .99), (.01, .99), (.01, .98)), source=img)
+            # self.view = s.imshow(img, (50,50,50), fignum = 3, stretch=(.01, .99), source=img)
+            self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
+
+        elif mode == 'NDVI':
+            vi = s.ndvi(img, 30, 85)
+            colors = ["black", "grey", "red", "yellow", "lawngreen"]
+            cmap1 = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", colors)      
+            self.view = MyImageView(vi, stretch=((.03, .98)), source=img, cmap=cmap1)      
+            # self.view = s.imshow(vi, fignum = 3, stretch=(.01, .99), cmap=cmap1, source=img)
+            self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
+
+
         plt.tight_layout()
-        print(self.view.lastPixel)
+        # print(self.view.lastPixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
 
+    def openFromDownloadList(self, item):
+        if self.b1.isChecked():
+            mode = 'RGB'
+            self.viewRGBlayout.show()
+            self.viewSingleBandlayout.hide()
+            self.viewNDVIlayout.hide()
+            self.openHyperionFromList(item, mode)
 
-    def openHyperionFromList(self, item, mode='RGB'):
+        elif self.b2.isChecked():
+            mode = 'single'
+            self.viewRGBlayout.hide()
+            self.viewNDVIlayout.hide()
+            self.viewSingleBandlayout.show()
+            
+            self.openHyperionFromList(item, mode)
+            self.bandValidator.setTop(self.view.cb_mouse.bandcount)
+        
+        elif self.b3.isChecked():
+            mode = 'NDVI'
+            self.viewRGBlayout.hide()
+            self.viewSingleBandlayout.hide()
+            self.viewNDVIlayout.show()
+            self.openHyperionFromList(item, mode)
+
+
+
+    def openHyperionFromList(self, item, mode='RGB', r=50, g=27, b=17, sb=50):
         """ Processes and opens a Hyperion image in the viewer """
         self.v_fig.clf()
         
@@ -302,46 +349,54 @@ class qViewer(qtw.QWidget):
             h_filename = item + '.hdr'
             h_filepath = os.path.join(DOWNLOAD_PATH, filename[:-4], h_filename)
 
-            img = envi.open(h_filepath, filepath)
-            vi = s.ndvi(img, 30, 85)
+            self.img = envi.open(h_filepath, filepath)
+            
+            
             
         else:
             # file was imported and path has to be queried from db
-            self.requestFilepath.emit(item)
+            self.requestFilepath.emit(item, mode)
             return
         
         desc = gdal.Info(filepath)
         desc = desc.split('Band 1 Block')[0]
 
-        self.properties_text.setText(str(img).replace('\t', ''))
+        self.properties_text.setText(str(self.img).replace('\t', ''))
         self.properties_text.append(desc)
 
         if mode == 'RGB':
             
-            self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)
+            self.view = MyImageView(self.img, (r, g, b), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img)
             self.view.spectrum_plot_fig_id = 4
             self.view.show(mode='data', fignum=3)
 
         elif mode == 'single':
-            
-            self.view = s.imshow(img, (50,50,50), fignum = 3, stretch=(.01, .99), source=img)
+            self.view = MyImageView(self.img, (sb, sb, sb), stretch=((.01, .99)), source=self.img)
             self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
 
         elif mode == 'NDVI':
-            
-            colors = ["black", "grey", "red", "yellow", "lawngreen"]
-            cmap1 = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", colors)            
-            self.view = s.imshow(vi, fignum = 3, stretch=(.01, .99), cmap=cmap1, source=img)
+            vi = s.ndvi(self.img, 30, 85)
+            colors = ["black", "grey", "red", "yellowgreen", "lawngreen"]
+            cmap1 = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", colors)      
+            self.view = MyImageView(vi, stretch=((.05, .95)), source=self.img, cmap=cmap1)      
             self.view.spectrum_plot_fig_id = 4
+            self.view.show(mode='data', fignum=3)
 
-        
-            
 
         plt.tight_layout()
         # print(self.view.lastPixel)
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
+    def changeSingleBand(self, s):
+        value = str(s)
+        self.bandLabel.setText(value)
+        if self.view:
+            self.view.set_data(self.img, bands=(s, s, s), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img)
+
+
 
     def announcePixel(self):
         r = self.view.lastPixel["row"]
@@ -361,7 +416,7 @@ class qViewer(qtw.QWidget):
         dlg = qtw.QFileDialog()
         dlg.setWindowTitle('Import a Hyperspectral Image')
         dlg.setFileMode(qtw.QFileDialog.ExistingFile)
-        dlg.setNameFilter("Hyperspectral files (*.hdr *.L1R *.lan *.tif *.hd5);;All files (*.*)")
+        dlg.setNameFilter("Hyperspectral files (*.hdr *.L1R *.lan *.tif *.hd5 *.he5);;All files (*.*)")
         filename = None
         
         if dlg.exec_() == qtw.QDialog.Accepted:
@@ -396,7 +451,7 @@ class qViewer(qtw.QWidget):
                     img = envi.open(filename.replace('.img', '.hdr'), filename)
                     bandLimit = img.nbands
                     print('\n',img) 
-                        
+               
                 elif fileFormat == 'tif':
                     print('Processing TIF file...')
                     print('Please wait...')
@@ -413,17 +468,17 @@ class qViewer(qtw.QWidget):
                         print('Samples: ', img.RasterYSize)
                         print('Bands:   ', img.RasterCount)
                     
-                    # if os.path.exists(filename[:-3] + 'lan'):
-                    #     print('\nThis GeoTiff has already been converted to a LAN file. Skipping conversion...')
-                    #     dst_filename = filename[:-3] + 'lan'
-                    #     img = s.open_image(dst_filename)
-                    # else:
-                    #     print('Converting GeoTiff file to LAN for use with Spectral Python')
-                    #     dst_filename = filename[:-3] + 'lan'
-                    #     gdal.UseExceptions()
-                    #     print('Please wait, this may take a few mins...')
-                    #     gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
-                    #     img = s.open_image(dst_filename)
+                    if os.path.exists(filename[:-3] + 'lan'):
+                        print('\nThis GeoTiff has already been converted to a LAN file. Skipping conversion...')
+                        dst_filename = filename[:-3] + 'lan'
+                        img = s.open_image(dst_filename)
+                    else:
+                        print('Converting GeoTiff file to LAN for use with Spectral Python')
+                        dst_filename = filename[:-3] + 'lan'
+                        gdal.UseExceptions()
+                        print('Please wait, this may take a few mins...')
+                        gdal.Translate(dst_filename, img, format='LAN', outputType=gdal.GDT_Int16, options=['-scale'])
+                        img = s.open_image(dst_filename)
                     
  
                 else: #if not acceptable file type go here
@@ -446,10 +501,7 @@ class qViewer(qtw.QWidget):
                     self.nicknameChosen.emit(filename, 'None')
                     self.downloadList.addItem(f'{fileID}')
 
-    def bandValueChanged(self, value):
-            value = str(value)
-            self.bandLabel.setText(value)
-
+            
     def __init__(self, *args, **kwargs):
         super().__init__()
         # s.settings.imshow_figure_size = (2, 20)
@@ -470,7 +522,7 @@ class qViewer(qtw.QWidget):
         self.downloadList = qtw.QListWidget()
         self.downloadList.setFixedWidth(230)
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
-        self.downloadList.itemDoubleClicked.connect(self.openHyperionFromList)
+        self.downloadList.itemDoubleClicked.connect(self.openFromDownloadList)
 
         self.open_btn = qtw.QPushButton("Import Spectral Scan", clicked=self.importFile)
         self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
@@ -534,6 +586,7 @@ class qViewer(qtw.QWidget):
         # Mid frame
         self.v_midframe = qtw.QWidget()
         self.v_midframe.setLayout(qtw.QVBoxLayout())
+        
 
         self.v_imageFrame = qtw.QWidget()
         # self.v_imageFrame.setStyleSheet("background-color:#ccc;")
@@ -542,9 +595,13 @@ class qViewer(qtw.QWidget):
         self.splitter = qtw.QSplitter()
 
         self.subLayout = qtw.QWidget()
-        # self.subLayout.setStyleSheet("background-color:red;")
+        # self.subLayout.setStyleSheet("background-color:#ccc;")
         self.subLayout.setLayout(qtw.QVBoxLayout())
         self.subLayout.setMinimumWidth(320)
+        self.subLayout.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Expanding)
+        print('margins are:', self.subLayout.layout().getContentsMargins())
+        self.subLayout.layout().setContentsMargins(0,0,0,0)
+        
         
         self.imageHolder = qtw.QWidget()
 
@@ -559,15 +616,15 @@ class qViewer(qtw.QWidget):
         self.VMBox.setLayout(VMlayout)
         self.b1 = qtw.QRadioButton('RGB')
         self.b1.setChecked(True)
-        self.b1.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='RGB'))
+        self.b1.toggled.connect(lambda:self.openFromDownloadList(self.downloadList.currentItem()))
         VMlayout.addWidget(self.b1)
 
         self.b2 = qtw.QRadioButton('Single Band')
-        self.b2.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='single'))
+        self.b2.toggled.connect(lambda:self.openFromDownloadList(self.downloadList.currentItem()))
         VMlayout.addWidget(self.b2)
 
         self.b3 = qtw.QRadioButton('NDVI')
-        self.b3.toggled.connect(lambda:self.openHyperionFromList(self.downloadList.currentItem(), mode='NDVI'))
+        self.b3.toggled.connect(lambda:self.openFromDownloadList(self.downloadList.currentItem()))
         VMlayout.addWidget(self.b3)
         VMlayout.addStretch()
 
@@ -605,20 +662,55 @@ class qViewer(qtw.QWidget):
         self.bandSlider.setTickInterval(10)
         self.bandSlider.setTickPosition(qtw.QSlider.TicksBelow)
         self.bandSlider.setMinimumWidth(200)
-        self.bandLabel = qtw.QLabel(str(self.bandSlider.value()))
-        self.bandLabel.setMinimumWidth(30)
+        self.bandLabel = qtw.QLineEdit(str(self.bandSlider.value()))
+        self.bandLabel.setFixedWidth(30)
+        self.bandLabel.setMaxLength(3)
+        self.bandValidator = qtg.QIntValidator(1, 250)
+        self.bandLabel.setValidator(self.bandValidator)
         self.viewSingleBandlayout.layout().addWidget(self.bandLabel)
         self.viewSingleBandlayout.layout().addWidget(self.bandSlider)
         self.viewSingleBandlayout.layout().addStretch()
-        self.viewSingleBandlayout.layout().addWidget(qtw.QPushButton('RGB View'))
-        self.bandSlider.valueChanged.connect(self.bandValueChanged)
+        self.bandSlider.valueChanged.connect(self.changeSingleBand)
+        self.bandLabel.editingFinished.connect(lambda: self.bandSlider.setValue(int(self.bandLabel.text())))
+
+        # NDVI Color Scale
+        self.viewNDVIlayout = qtw.QWidget()
+        self.viewNDVIlayout.setLayout(qtw.QVBoxLayout())
+        self.viewNDVIlayout.layout().setContentsMargins(0,0,0,0)
+        # self.viewNDVIlayout.setMaximumHeight(55)
+        # self.viewNDVIlayout.setMaximumWidth(200)
+        # self.viewNDVIlayout.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Fixed)
+
+        n_fig, ax = plt.subplots(figsize=(2, .5), num=10)
+        self.viewNDVIlayout.setStyleSheet("background-color:red;")
+        n_fig.subplots_adjust(bottom=.8)
+        print('n_fig number:', n_fig.number)
+
+        cmap = (matplotlib.colors.ListedColormap(["black", "grey", "red", "yellow", "lawngreen"]))
+        bounds = [-1, 0, .25, .5, 1]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
+        n_fig.colorbar(
+            matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm),
+            cax=ax,
+            boundaries=bounds,  # Adding values for extensions.
+            ticks=bounds,
+            spacing='uniform',
+            orientation='horizontal',
+            label='NDVI Scale',
+        )
+        
+        
+        self.NDVICanvas = FigureCanvasQTAgg(n_fig) #Creation of the display canvas
+        self.NDVICanvas.draw()
+        self.viewNDVIlayout.layout().addWidget(self.NDVICanvas)
+
 
        
-        self.v_fig = plt.figure(figsize=(1,5), dpi=80)
-        self.s_fig = plt.figure(figsize=(6,5))
+        self.v_fig = plt.figure(figsize=(1,5), dpi=80, num=3)
+        self.s_fig = plt.figure(figsize=(6,5), num=4)
 
-        # print('v_fig number:', self.v_fig.number)
-        # print('s_fig number:', self.s_fig.number)
+        print('v_fig number:', self.v_fig.number)
+        print('s_fig number:', self.s_fig.number)
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
         self.imageHolder.setLayout(qtw.QVBoxLayout())
@@ -642,8 +734,11 @@ class qViewer(qtw.QWidget):
         self.subLayout.layout().addWidget(self.v_canvas_nav)
         self.subLayout.layout().addWidget(self.imageHolder)
         self.subLayout.layout().addWidget(self.VMBox)
+        self.subLayout.layout().addWidget(self.viewNDVIlayout)
         self.subLayout.layout().addWidget(self.viewRGBlayout)
-        # self.subLayout.layout().addWidget(self.viewSingleBandlayout)
+        self.subLayout.layout().addWidget(self.viewSingleBandlayout)
+        self.viewSingleBandlayout.hide()
+        self.viewNDVIlayout.hide()
         self.subLayout2.layout().addWidget(self.v_spectraCanvas)
         self.subLayout2.layout().addWidget(self.pixelButtons)
         self.splitter.addWidget(self.subLayout)

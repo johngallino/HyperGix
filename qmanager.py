@@ -309,6 +309,7 @@ class qProfileManager(qtw.QFrame):
 
         self.setLayout(self.layout)
         self.fig =  plt.figure(figsize=(12,4))
+        print('qmanager spectral plot figure is:', self.fig.number)
     
         self.plot1 = self.fig.add_subplot(111)
 

@@ -24,7 +24,8 @@ class Databaser(qtw.QWidget):
     matsInDB = qtc.pyqtSignal(list)
     reportPixels = qtc.pyqtSignal(list, int)
     reportPixelSource = qtc.pyqtSignal(str, int, int)
-    reportFilepath = qtc.pyqtSignal(str)
+    reportFilepath = qtc.pyqtSignal(str, str)
+    addScanSuccess = qtc.pyqtSignal(str)
     delScanSuccess = qtc.pyqtSignal(str)
     delProfileSuccess = qtc.pyqtSignal(str)
 
@@ -83,7 +84,8 @@ class Databaser(qtw.QWidget):
             fileFormat = id[-3:]
             id = parts[i].replace(f'.{fileFormat}', '')
         else:
-            fileFormat = 'L1R'
+            fileFormat = id[-3:]
+            filepath = os.path.join(config.HYPERION_SCANS_PATH, id)
             
 
         presenceCheck = qts.QSqlQuery(self.db)
@@ -229,7 +231,24 @@ class Databaser(qtw.QWidget):
                     date = None
                     time = None
                     interleave = 'BSQ'
-      
+
+            elif 'HDF5' in driver:
+                size = infoSearch(info, 'Size is ', 9).split(' ')
+                rows = size[0]
+                samples = size[1]
+                swirList = infoSearch(info, 'List_Cw_Swir=', 1708).split(' ')
+                vnirList = infoSearch(info, 'List_Cw_Vnir=', 648).split(' ')
+                print('swirlist:', swirList)
+                print('vnirList', vnirList)
+                bands = len(swirList) + len(vnirList)
+                bandcenters = swirList + vnirList
+                print('total bands:', bands)
+                interleave = 'BIL'
+                sensor = None
+                date = None
+                time = None
+                
+
 
             else:
                 rows = infoSearch(info, 'Number of Along Track Pixels=', 4)
@@ -327,7 +346,8 @@ class Databaser(qtw.QWidget):
             
             if good:
                 print(f'scan {id} added successfully to db')
-                #send signal to add to the list
+                self.addScanSuccess.emit(id)
+                # send signal to add to the list
             else:
                 print('SCAN NOT ADDED TO DATABASE!\n', insertQuery.lastError().text())
       
@@ -545,7 +565,7 @@ class Databaser(qtw.QWidget):
             print('returning', query.value(0), query.value(1), query.value(2))
             self.reportPixelSource.emit(query.value(0), query.value(1), query.value(2))
 
-    def report_data_for_fileID(self, id):
+    def report_data_for_fileID(self, id, mode):
         ''' given a scan id, returns filepath from db '''
 
         query = qts.QSqlQuery(self.db)
@@ -554,9 +574,9 @@ class Databaser(qtw.QWidget):
         query.exec_()
         
         if query.next():
-            self.reportFilepath.emit(query.value(0))
+            self.reportFilepath.emit(query.value(0), mode)
         else:
-            self.reportFilepath.emit(f'ERR: no path for {id}')
+            self.reportFilepath.emit(f'ERR: no path in database for {id}')
 
 
     def deletePixel(self, pid):
