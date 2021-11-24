@@ -97,7 +97,7 @@ class Databaser(qtw.QWidget):
             print(f'{id} is not in the database currently')
         else:
             present = True
-            print(f'{id} already in database')
+            # print(f'{id} already in database')
 
         def infoSearch(file, term, datalength):
             ''' use this method to pull data from gdal.info '''
@@ -438,35 +438,35 @@ class Databaser(qtw.QWidget):
 
     def delete_Scan(self, scanID):
         ''' given a scan ID, deletes the file and removes from db'''
-        ##### UNCOMMENT TO ACTUALLY DELETE FILES ####
-
-        # query1 = qts.QSqlQuery(self.db)
-        # query1.prepare('SELECT filepath from scans where id = :scanID')
-        # query1.bindValue(':scanID', scanID)
-        # good = query1.exec_()
-
-        # if good:
-        #     query1.next()
-        #     filepath = query1.value(0)
-        #     if '\\' in filepath:
-        #         parts = filepath.split('\\')
-        #     else:
-        #         parts = filepath.split('/')
-
-        #     query1 = qts.QSqlQuery(self.db)
-        #     query1.prepare('DELETE from scans where filepath = :filepath')
-        #     query1.bindValue(':filepath', filepath)
-        #     good = query1.exec_()
-
-            # if good:
-
-                # print(f'{scanID} deleted from db')
-        self.delScanSuccess.emit(scanID)
-
-            # else:
-                # print('ERROR!\n', query1.lastError().text())     
-                
         
+        query1 = qts.QSqlQuery(self.db)
+        query1.prepare('SELECT filepath from scans where id = :scanID')
+        query1.bindValue(':scanID', scanID)
+        good = query1.exec_()
+
+        if good:
+            query1.next()
+            filepath = query1.value(0)
+            if '\\' in filepath:
+                parts = filepath.split('\\')
+            else:
+                parts = filepath.split('/')
+
+            query1 = qts.QSqlQuery(self.db)
+            query1.prepare('DELETE from scans where filepath = :filepath')
+            query1.bindValue(':filepath', filepath)
+            good = query1.exec_()
+
+            if good:
+
+                print(f'{scanID} deleted from db')
+                self.delScanSuccess.emit(scanID)
+
+            else:
+                print('ERROR!\n', query1.lastError().text())     
+
+            ##### UNCOMMENT TO ACTUALLY DELETE FILES ####
+                
             # filename = parts[len(parts) - 1]
             # print(filename)
             # if filename[:-4] == parts[len(parts)-2]:
@@ -688,26 +688,25 @@ class LogIner(qtc.QObject):
     """ An object to control logging into USGS server """
 
     log_signal = qtc.pyqtSignal(str)
+    requestCredentials = qtc.pyqtSignal()
+    
+
+    def __init__(self):
+        super().__init__()
+        self.username = ''
+        self.password = ''  
+        self.requestCredentials.emit() 
 
     def send_log_signal(self,text):
         self.log_signal.emit(text)
 
-    def __init__(self):
-        super().__init__()
-        self.login()
-
     def login(self):
         """ Login to USGS """
-        serviceUrl = config.serviceUrl
-        config.apiKey
-        
-        username = 'jgallino'
-        password = 'SrOP84X4SeuW'
-        
+                
         # login
-        payload = {'username' : username, 'password' : password}
+        payload = {'username' : self.username, 'password' : self.password}
         try:
-            config.apiKey = self.toDict(self.sendRequest(serviceUrl + "login", payload))
+            config.apiKey = self.toDict(self.sendRequest(config.serviceUrl + "login", payload))
         except Exception as e:
             print(e)
 
@@ -723,13 +722,33 @@ class LogIner(qtc.QObject):
             self.login_failed('No valid response.', 'USGS server may be down or you are not online.')
             self.send_log_signal('USGS Server is down or you are not connected to the internet')
 
+    def refreshAPIKey(self):
+        payload = {'username' : self.username, 'password' : self.password}
+        url = config.serviceUrl + 'login'
+        json_data = json.dumps(payload)
+        try:
+            print('old API key:', config.apiKey)
+            
+            response = requests.post(url, json_data)
+            print('response is', response.text)
+
+            config.apiKey = self.toDict(response.content)
+
+            print('new key:', config.apiKey['data'])
+            return True
+        except Exception as e:
+            response.close()
+            print('!!!!!', e)
+            return False
+
     def toDict(self, j):
         try:
             converted = json.loads(j)
             return converted
-        except:
+        except Exception as e:
             err = '\n### Did not receive valid JSON. USGS site may be down for maintenance\n\n'
             print(err.upper())
+            print(e)
             return None
 
 
@@ -738,7 +757,7 @@ class LogIner(qtc.QObject):
         headers = {'X-Auth-Token': config.apiKey} 
         if config.apiKey:
             response = requests.post(url, json_data, headers = headers)  
-            # print('\nsending with headers to %s: %s %s' % (url.replace(serviceUrl,''), data, headers)) 
+            # print('\nsending with headers to %s: %s %s' % (url.replace(config.serviceUrl,''), data, headers)) 
         else:
             response = requests.post(url, json_data)
             print('sending:', data) 
@@ -747,8 +766,8 @@ class LogIner(qtc.QObject):
 
         if 'API key has expired' in response.text:
             print('API key expired. Logging in again...')
-            self.login()
-            self.sendRequest(self, url, data, apiKey=config.apiKey)
+            if self.refreshAPIKey():
+                self.sendRequest(self, url, data, apiKey=config.apiKey)
 
         try:
             httpStatusCode = response.status_code 
@@ -816,4 +835,4 @@ class LogIner(qtc.QObject):
 
 
 
-server = LogIner()
+

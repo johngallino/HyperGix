@@ -3,7 +3,6 @@ import json
 import os
 import geocoder 
 import workers as w
-from workers import server
 from ast import literal_eval 
 from urllib.request import urlopen 
 from PyQt5 import QtWebEngineWidgets as qtwe
@@ -54,7 +53,7 @@ class ResultBox(qtw.QFrame):
          
 
 
-    def __init__(self, imageLabel, id, caption, count):
+    def __init__(self, imageLabel, id, caption, count, server):
         super().__init__()
         self.layout = qtw.QVBoxLayout()
         self.setLayout(self.layout)
@@ -87,10 +86,12 @@ class QHypbrowser(qtw.QWidget):
     downloadFinishedB = qtc.pyqtSignal(str)
     downloadUnzippedB = qtc.pyqtSignal(str)
     nicknameChosenB = qtc.pyqtSignal(str, str)
+    newCredentials = qtc.pyqtSignal(str, str)
 
     def __init__(self, parent):
         super(qtw.QWidget, self).__init__(parent)
         self.layout = qtw.QVBoxLayout()
+        self.server = parent.server
 
         # Search bar area
         self.searchLabel = qtw.QLabel("Search by place name or lat/lng coordinates", self)
@@ -133,15 +134,27 @@ class QHypbrowser(qtw.QWidget):
         self.searchBoxLayout.addWidget(self.cloudBox)
         self.searchBoxLayout.addStretch()
 
-        # self.testbtn = qtw.QPushButton("all pixmaps", clicked=self.printPixmaps)
-        # self.searchBoxLayout.addWidget(self.testbtn)
+        self.loginLabel = qtw.QLabel('USGS Login:', self)
+        self.loginBox = qtw.QLineEdit(self)
+        self.loginBox.setText(self.server.username)
+        self.passwordLabel = qtw.QLabel('Pw:', self)
+        self.passwordBox = qtw.QLineEdit(self)
+        self.passwordBox.setText(self.server.password)
+        self.passwordBox.setEchoMode(qtw.QLineEdit.EchoMode.Password)
 
+        self.saveBtn = qtw.QPushButton('Save', self, clicked=self.updateCredentials)
+
+        self.searchBoxLayout.addWidget(self.loginLabel)
+        self.searchBoxLayout.addWidget(self.loginBox)
+        self.searchBoxLayout.addWidget(self.passwordLabel)
+        self.searchBoxLayout.addWidget(self.passwordBox)
+        self.searchBoxLayout.addWidget(self.saveBtn)
+        
         self.prev_btn = qtw.QPushButton("<<", clicked=lambda:self.showResults('back'))
         self.prev_btn.hide()
         
         self.next_btn = qtw.QPushButton(">>", clicked=lambda:self.showResults('next'))
         self.next_btn.hide()
-        
         
         self.GridLayout = qtw.QGridLayout()
 
@@ -207,6 +220,14 @@ class QHypbrowser(qtw.QWidget):
         self.r_thumbs = []
         self.qframes = []
 
+    def updateCredentials(self):
+        username = self.loginBox.text()
+        password = self.passwordBox.text()
+        self.newCredentials.emit(username, password)
+        
+        
+        
+
     def updatePageSize(self, int):
         self.pageSize = int
         
@@ -261,17 +282,17 @@ class QHypbrowser(qtw.QWidget):
                 'sceneFilter' : sceneFilter}
                 
         datasets = 0
-        datasets = server.sendRequest(serviceUrl + "scene-search", payload, config.apiKey)
+        datasets = self.server.sendRequest(serviceUrl + "scene-search", payload, config.apiKey)
         
         obj = json.loads(datasets)
         pretty = json.dumps(obj, indent=3)
         # Print results to terminal
         self.terminalBox.append(pretty)
         
-        self.results = server.toDict(datasets)['data']['results']
+        self.results = self.server.toDict(datasets)['data']['results']
 
         self.loadingResults.emit()
-        self.resultCount = (len(server.toDict(datasets)['data']['results']))
+        self.resultCount = (len(self.server.toDict(datasets)['data']['results']))
         if not self.resultCount:
             print('No results for that search')
 
@@ -343,7 +364,7 @@ class QHypbrowser(qtw.QWidget):
                 
                 r_clouds = str(self.results[self.counter]['cloudCover'])
                 captionString =  'Captured ' + r_date + '\n' + r_coords + '\nCloud Cover: ' + r_clouds
-                singleResult = ResultBox(r_label, r_id, captionString, self.counter)
+                singleResult = ResultBox(r_label, r_id, captionString, self.counter, self.server)
 
                 singleResult.downloadStartedA.connect(self.downloadStartedB) #sending signals up the hierarchy
                 singleResult.downloadFinishedA.connect(self.downloadFinishedB)

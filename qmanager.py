@@ -1,5 +1,4 @@
 import os
-import pickle
 import matplotlib
 import spectral.io.envi as envi
 from spectral.graphics.spypylab import ImageView
@@ -137,7 +136,7 @@ class qProfileManager(qtw.QFrame):
     reportAverage = qtc.pyqtSignal(str, list)
 
     def populateMaterials(self, materials):
-        print('materials received:', materials)
+        # print('materials received:', materials)
         self.materials = materials
         for profile in self.materials:
             self.profileList.addItem(profile)

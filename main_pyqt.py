@@ -1,12 +1,11 @@
-from typing_extensions import final
 import config
 import workers as w
 import os
-from workers import server, Databaser
+from workers import Databaser, LogIner
 from qmanager import qProfileManager
 from qhypbrowser import QHypbrowser
 from qviewer import qViewer
-from qclassifier import qClassifier
+
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
@@ -36,6 +35,7 @@ class ProgressBar(qtw.QProgressBar):
 class MyWindow(qtw.QMainWindow):
     """ Class for main application window """
     receiveLogInSignal = qtc.pyqtSignal
+    reportLoginCredentials = qtc.pyqtSignal(str, str)
     
     def __init__(self):
         super(MyWindow, self).__init__()
@@ -44,6 +44,15 @@ class MyWindow(qtw.QMainWindow):
         self.setWindowTitle('HyperGix Hyperspectral Software ' + self.version)
 
         self.databoy = Databaser()
+        self.server = LogIner()
+        self.HGsettings = qtc.QSettings('John Gallino', 'HyperGix')
+        self.login2USGS()
+
+        #USGS Login Credentials
+        # self.HGsettings.setValue('username', 'jgallino')
+        # self.HGsettings.setValue('password', 'SrOP84X4SeuW')
+        # self.HGsettings.sync()
+
         self.initUI()
 
         #checking that all files in download folder are in DB
@@ -58,9 +67,18 @@ class MyWindow(qtw.QMainWindow):
         else:
             self.loggedIn = False
 
+    def login2USGS(self):
+        self.server.username = self.HGsettings.value('username', 'jgallino', type=str)
+        self.server.password = self.HGsettings.value('password', 'SrOP84X4SeuW', type=str)
+        self.server.login()
+
+    def setCredentials(self, u, p):
+        self.HGsettings.setValue('username', u)
+        self.HGsettings.setValue('password', p)
+
         
     def initUI(self):
-        self.mainNotebook = MyNotebook(self)
+        self.mainNotebook = MyNotebook(self, self.server)
         self.setCentralWidget(self.mainNotebook)
 
         #Menu Bar
@@ -74,13 +92,17 @@ class MyWindow(qtw.QMainWindow):
         self.dl_pbar.setMaximumWidth(165)
         self.status_bar.addPermanentWidget(self.dl_pbar)
 
+        # Logging in to USGS
+        self.server.requestCredentials.connect(self.setCredentials)
+        self.mainNotebook.tab1.newCredentials.connect(self.setCredentials)
 
         # STATUS BAR MESSAGES
         
         self.setStatusBar(self.status_bar)
         # self.receiveLogInSignal.connect(server.send_log_signal)
         # self.receiveLogInSignal.emit()
-        server.log_signal.connect(self.status_bar.showMessage)
+        self.server.log_signal.connect(self.status_bar.showMessage)
+        self.mainNotebook.tab1.newCredentials.connect(lambda: self.status_bar.showMessage('USGS Login credentials updated!', 3000))
         self.mainNotebook.tab1.performingSearch.connect(lambda: self.status_bar.showMessage('Performing search...'))
         self.mainNotebook.tab1.loadingResults.connect(lambda: self.status_bar.showMessage('Loading results...'))
         self.mainNotebook.tab1.downloadStartedB.connect(self.status_bar.showMessage)
@@ -129,20 +151,25 @@ class MyWindow(qtw.QMainWindow):
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
 
+    def updateCredentials(self, username, password):
+        self.HGsettings.setValue('username', username)
+        self.HGsettings.setValue('password', password)
+        print('new credentials saved')
+
         
 
 class MyNotebook(qtw.QWidget):
 
-    def __init__(self, parent):
+    def __init__(self, parent, server):
         super(qtw.QWidget, self).__init__(parent)
         self.layout = qtw.QVBoxLayout(self)
-
+        self.server = server
         # Initialize tabs
         self.tabs = qtw.QTabWidget()
         self.tab1 = QHypbrowser(self)
         self.tab2 = qProfileManager()
         self.tab3 = qViewer()
-        self.tab4 = qClassifier()
+        # self.tab4 = qClassifier()
         self.tabs.resize(300,200)
 
 
