@@ -9,6 +9,7 @@ from PyQt5 import QtWebEngineWidgets as qtwe
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
+from PyQt5 import QtWebEngineWidgets as qtwe
 
 
 
@@ -186,6 +187,8 @@ class QHypbrowser(qtw.QWidget):
         # Main results area
         self.resultsWindow = qtw.QFrame(self)
         self.resultsWindow.setFrameShape(qtw.QFrame.Box)
+        self.webView = qtwe.QWebEngineView()
+        self.webView.load(qtc.QUrl('http://maps.google.com'))
         # self.GridLayout.addWidget(self.resultsWindow, 0, 1, 1, 3)
         self.splitter.addWidget(self.resultsWindow)
         self.splitter.setSizes([250,650])
@@ -204,6 +207,7 @@ class QHypbrowser(qtw.QWidget):
         # Results area contents
         self.resultsVert = qtw.QVBoxLayout()
         self.resultsWindow.setLayout(self.resultsVert)
+        self.resultsVert.addWidget(self.webView)
         self.resultsVert.addLayout(self.resultsBoxHolder)
         self.resultsVert.addLayout(self.nav_layout)
 
@@ -344,6 +348,7 @@ class QHypbrowser(qtw.QWidget):
     def showResults(self, direction='next'):
         """ Erase results and display next [pageSize] results """
         self.clearResults()
+        self.webView.hide()
         self.qframes = []
         self.r_thumbs = []
         self.downloadThumbnails(self.results)

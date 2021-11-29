@@ -27,6 +27,8 @@ NICKNAMES_PATH = os.path.join(os.getcwd(), 'nicknames.bin')
 
 class PixelViewer(qtw.QFrame):
 
+    requestPixelDeleted = qtc.pyqtSignal(str)
+
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.setFrameShape(qtw.QFrame.Box)
@@ -44,7 +46,7 @@ class PixelViewer(qtw.QFrame):
         self.pixelListView.setMaximumWidth(150)
         self.pixelListView.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Expanding)
         # self.downloadList.itemDoubleClicked.connect(self.openTiffFromList)
-        self.delPixel_btn = qtw.QPushButton("Delete Pixel")
+        self.delPixel_btn = qtw.QPushButton("Delete Pixel", clicked=self.deletePixel)
         self.delPixel_btn.setMaximumWidth(150)
         
         self.leftFrame.addWidget(self.pixelListLabel)
@@ -57,7 +59,7 @@ class PixelViewer(qtw.QFrame):
         # Right Side
 
         self.v_midframe = qtw.QWidget()
-        self.v_midframe.setMaximumWidth(180)
+        self.v_midframe.setFixedWidth(180)
         self.v_midframe.setLayout(qtw.QVBoxLayout())
         self.v_midframe.setStyleSheet("background-color:#ccc; padding:0,0")
         
@@ -66,6 +68,7 @@ class PixelViewer(qtw.QFrame):
         print('pixel viewer v_fig is', self.v_fig.number) ### It's 2
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
+        
         # self.v_canvas_nav = NavigationToolbar2QT(self.v_imageCanvas, self.v_midframe)
 
         self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
@@ -86,38 +89,49 @@ class PixelViewer(qtw.QFrame):
 
 
     def populatePixelList(self):
-        
         self.pixelListView.clear()
-
         for pixel in self.pixelsToList:
             self.pixelListView.addItem(pixel)
 
+    def deletePixel(self):
+        target = self.pixelListView.currentItem().text()
+        self.requestPixelDeleted.emit(target)
+
+    def removePixelFromList(self, pid):
+        items_list = self.pixelListView.findItems(pid, qtc.Qt.MatchExactly)
+        for item in items_list:
+            r = self.pixelListView.row(item)
+            self.pixelListView.takeItem(r)
+
+
     def findPixel(self, source, r, c):
-        print('SOURCE IS', source)
         self.v_fig.clear()
         self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
         self.v_fig.add_axes(self.ax1)
         self.ax1.set_axis_off()
-        name = source.replace('.L1R', '')[-22:]
+        source2 = source.replace('\\', '/')
+        parts = source2.split('/')
+        name = parts[(len(parts)-1)][:-4]
         self.pixelDetailLabel.setText(f'{name}\nRow: {r}\nCol: {c}')
         try:
             img = envi.open(source.replace('.L1R', '.hdr'), source)
             self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)        
             self.view.open_zoom(center=(r,c), size=65, fignum=2)
+        except:
+            try:
+                img = s.open_image(source)
+                self.view = MyImageView(img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=img)        
+                self.view.open_zoom(center=(r,c), size=65, fignum=2)
+            except Exception as e:
+                print(e)
+                fig = self.v_fig
+                ax = fig.add_subplot()
+                fig.subplots_adjust(top=0.85)
+                ax.axis([0, 10, 0, 10])
+                ax.text(2, 5, r'Missing Scan', fontsize=7)
 
-        except Exception as e:
-            print(e)
-            fig = self.v_fig
-            ax = fig.add_subplot()
-            fig.subplots_adjust(top=0.85)
-            ax.axis([0, 10, 0, 10])
-            ax.text(2, 5, r'Missing Scan', fontsize=7)
-
-            ax.set_axis_off()
+                ax.set_axis_off()
             
-            
-
-        
 
         self.v_imageCanvas.draw()
         
@@ -157,7 +171,7 @@ class qProfileManager(qtw.QFrame):
             self.pixelLabel.setText(f'{material}\n{pixelCount} pixels')
 
             self.plot1.cla()
-            self.x = np.linspace(400, 2500, 221)
+            self.x = np.linspace(400, 2500, bandcount)
             self.plotList = []
             for pixel in pixelList:
                 pid = list(pixel.keys())
@@ -175,13 +189,18 @@ class qProfileManager(qtw.QFrame):
                         if count in badbands:
                             intList.pop(count)
                         count -= 1
+                    while len(intList) < bandcount:
+                        intList.append(0)
+
                     
                     self.plot1.plot(self.x, intList, label=f'Pixel {i}', linewidth='1', alpha=0.3)
                     self.plotList.append(intList)
 
-            print(self.plotList)
-            print('length of plotlist is', len(self.plotList))
-            avg = [sum(x) / len(x) for x in zip(*self.plotList)]
+            # print(self.plotList)
+            # print('length of plotlist is', len(self.plotList))
+            np.set_printoptions(precision = 2, suppress = True)
+            avg = [np.mean(x) for x in zip(*self.plotList)]
+            
             
 
             self.plot1.plot(self.x, avg, label='Average', linestyle='-', linewidth='2', color='midnightblue')
@@ -260,6 +279,7 @@ class qProfileManager(qtw.QFrame):
         for item in items_list:
             r = self.profileList.row(item)
             self.profileList.takeItem(r)
+        
     
     def __init__(self, *args, **kwargs):
         super().__init__()

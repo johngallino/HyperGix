@@ -1,5 +1,6 @@
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import spectral as s
+from spectral.algorithms.algorithms import msam, spectral_angles
 from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive, ParentViewPanCallback
 from spectral.io import aviris
 import spectral.io.envi as envi
@@ -11,6 +12,7 @@ import shutil
 import numpy as np
 matplotlib.use('Qt5Agg')
 from brokenaxes import brokenaxes
+from config import spectral_angles
 from osgeo import gdal
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
 from matplotlib.backend_bases import NavigationToolbar2
@@ -197,6 +199,7 @@ class qViewer(qtw.QWidget):
     switchToLAN = qtc.pyqtSignal(str)
     switchFinished = qtc.pyqtSignal()
     signal_delete = qtc.pyqtSignal(str)
+    means = np.zeros((6,66))
 
     def deleteScan(self):
         item = self.downloadList.currentItem()
@@ -214,6 +217,7 @@ class qViewer(qtw.QWidget):
         # print('scans received:', scans)
         for scan in scans:
             self.downloadList.addItem(scan)
+        self.openFromDownloadList(None)
 
     def populateMaterials(self, materials):
         # print('materials received:', materials)
@@ -267,12 +271,11 @@ class qViewer(qtw.QWidget):
         self.properties_text.append(desc)
         # would be nice to figure out how to scroll to the top automatically here
 
-        self.view = MyImageView(self.img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), interpolation='none', source=self.img, brokenaxes=False)
         self.view.spectrum_plot_fig_id = 4
         
         if mode == 'RGB':
             
-            self.view = MyImageView(self.img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img)
+            self.view = MyImageView(self.img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img, brokenaxes=False)
             self.view.spectrum_plot_fig_id = 4
             self.view.show(mode='data', fignum=3)
             self.r_entry.setText('50')
@@ -280,7 +283,7 @@ class qViewer(qtw.QWidget):
             self.b_entry.setText('17')
 
         elif mode == 'single':
-            self.view = MyImageView(self.img, (50, 50, 50), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img)
+            self.view = MyImageView(self.img, (50, 50, 50), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img, brokenaxes=False)
             self.view.spectrum_plot_fig_id = 4
             self.view.show(mode='data', fignum=3)
             if self.bandSlider.maximum() < self.view.cb_mouse.bandcount:
@@ -303,10 +306,10 @@ class qViewer(qtw.QWidget):
         self.v_spectraCanvas.draw()
 
     def openFromDownloadList(self, item):
-        if item:
-            print('item is:', item.text())
-        else:
+    
+        if item is None:
             item = self.downloadList.item(0)
+
         if self.b1.isChecked():
             mode = 'RGB'
             self.viewRGBlayout.show()
@@ -399,6 +402,11 @@ class qViewer(qtw.QWidget):
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
+    def setMeans(self, means):
+        means = np.array(means)
+        self.means = means
+        print('Means updated')
 
     def changeSingleBand(self, s): # receiving s as int
         value = str(s)
@@ -566,6 +574,22 @@ class qViewer(qtw.QWidget):
             print('No img -',  self.img)
             print(e)
 
+    def calcSpectralAngles(self):
+        from config import TARGET_BANDS as tg
+        np.set_printoptions(threshold=np.inf)
+        print('shape of means is', self.means.shape)
+        print('shape of img is', self.img.shape)
+        imgCube = self.img.read_bands(tg)
+        print('imgCube has shape', imgCube.shape)
+
+        angles = spectral_angles(imgCube, self.means)
+        clmap = np.argmin(angles, 2)
+       
+        # print(clmap)
+        # classes = s.create_training_classes(self.img, clmap)
+        # v = s.imshow(classes=(clmap + 1), interpolation='nearest')
+        
+
 
             
     def __init__(self, *args, **kwargs):
@@ -661,7 +685,7 @@ class qViewer(qtw.QWidget):
         self.subLayout = qtw.QWidget()
         # self.subLayout.setStyleSheet("background-color:#ccc;")
         self.subLayout.setLayout(qtw.QVBoxLayout())
-        self.subLayout.setMinimumWidth(320)
+        self.subLayout.setMinimumWidth(350)
         self.subLayout.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Expanding)
         self.subLayout.layout().setContentsMargins(0,0,0,0)
         
@@ -748,12 +772,10 @@ class qViewer(qtw.QWidget):
         self.viewNDVIlayout = qtw.QWidget()
         self.viewNDVIlayout.setLayout(qtw.QVBoxLayout())
         self.viewNDVIlayout.layout().setContentsMargins(0,0,0,0)
-        # self.viewNDVIlayout.setMaximumHeight(55)
-        # self.viewNDVIlayout.setMaximumWidth(200)
-        # self.viewNDVIlayout.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Fixed)
+
 
         n_fig, ax = plt.subplots(figsize=(2, .5), num=10)
-        self.viewNDVIlayout.setStyleSheet("background-color:red;")
+        # self.viewNDVIlayout.setStyleSheet("background-color:red;")
         n_fig.subplots_adjust(bottom=.8)
         print('n_fig number:', n_fig.number)
 
@@ -763,7 +785,7 @@ class qViewer(qtw.QWidget):
         n_fig.colorbar(
             matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm),
             cax=ax,
-            boundaries=bounds,  # Adding values for extensions.
+            boundaries=bounds, 
             ticks=bounds,
             spacing='uniform',
             orientation='horizontal',
@@ -794,6 +816,10 @@ class qViewer(qtw.QWidget):
         self.v_fig.add_axes(self.ax1)
         self.ax1.set_axis_off()
         self.s_fig.suptitle('Pixel Spectra', fontsize=10)
+        # self.ax2 = plt.Axes(self.s_fig, [400, 2500, 0, 5000])
+        # self.s_fig.add_axes(self.ax2)
+        sax = self.s_fig.gca()
+        sax.text(.2, .5, 'Double click on the image for pixel spectra')
 
         self.pixelButtons = qtw.QWidget()
         self.pixelButtons.setLayout(qtw.QHBoxLayout())
@@ -822,13 +848,19 @@ class qViewer(qtw.QWidget):
 
         self.PCA_btn = qtw.QPushButton("Calculate PCA", clicked = self.calcPCA)
         self.PCA_btn.setMaximumWidth(200)
+
+        self.specAngle_btn = qtw.QPushButton("Calculate Classes", clicked = self.calcSpectralAngles)
+        self.specAngle_btn.setMaximumWidth(200)
         
         # self.pixelButtons.layout().addWidget(self.clearPlot_btn)
         self.pixelButtons.layout().addWidget(self.addPixel_btn)
         self.pixelButtons.layout().addWidget(self.PCA_btn)
+        self.pixelButtons.layout().addWidget(self.specAngle_btn)
 
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
+        
 
         
 

@@ -28,15 +28,20 @@ class Databaser(qtw.QWidget):
     addScanSuccess = qtc.pyqtSignal(str)
     delScanSuccess = qtc.pyqtSignal(str)
     delProfileSuccess = qtc.pyqtSignal(str)
+    delPixelSuccess = qtc.pyqtSignal(str)
+    raggedArrayAlert = qtc.pyqtSignal()
+    reportMeans = qtc.pyqtSignal(list)
 
+    mats = []
 
     def report_scans(self):
         scans = self.pull_scans()
         self.scansInDB.emit(scans)
     
     def report_mats(self):
-        mats = self.pull_materials()
-        self.matsInDB.emit(mats)
+        self.mats = self.pull_materials()
+        self.matsInDB.emit(self.mats)
+        self.createMaterialMeansMatrix()
 
     def pull_scans(self):
         ''' returns a list of scans in the database'''
@@ -361,12 +366,26 @@ class Databaser(qtw.QWidget):
         presenceCheck.exec_()
         if not presenceCheck.next():
             print('id is:', id)
-            header = id.replace('L1R', 'hdr')
-            header = os.path.join(DOWNLOAD_PATH, id[:-4], header)
-            filepath = os.path.join(DOWNLOAD_PATH, id[:-4], id)
+            filename = id[:-4]
+            query1 = qts.QSqlQuery(self.db)
+            query1.prepare('SELECT filepath, sensor from scans WHERE id = :id')
+            query1.bindValue(':id', filename)
+            query1.exec_()
+            if query1.next():
+                filepath = query1.value(0)
+                if 'HYP' in query1.value(1):
+                    # scan is a Hyperion scan
+                    header = id.replace('L1R', 'hdr')
+                    header = os.path.join(DOWNLOAD_PATH, id[:-4], header)
+                    img = envi.open(header, filepath)
             
-
-            img = envi.open(header, filepath)
+                else: #not Hyperion
+                    try:
+                        import spectral as s
+                        img = s.open_image(filepath)
+                    except Exception as e:
+                        print('Problem with file \n', e)
+            
             spectra = ''
             for val in img[r,c]:
                 spectra += str(val) + ' '
@@ -464,8 +483,9 @@ class Databaser(qtw.QWidget):
 
             else:
                 print('ERROR!\n', query1.lastError().text())     
-
-            ##### UNCOMMENT TO ACTUALLY DELETE FILES ####
+            
+            ##### Currently scans are removed from the DB but the file is not deleted
+            ##### UNCOMMENT BELOW TO ACTUALLY DELETE FILES ####
                 
             # filename = parts[len(parts) - 1]
             # print(filename)
@@ -508,6 +528,19 @@ class Databaser(qtw.QWidget):
             self.delProfileSuccess.emit(profile)
         else:
             print('ERROR!\n', query1.lastError().text()) 
+
+    def deletePixel(self, pid):
+        ''' deletes a pixel from db by given PID '''
+        query1 = qts.QSqlQuery(self.db)
+        query1.prepare('DELETE from pixels WHERE pid = :pid')
+        query1.bindValue(':pid', pid)
+        good = query1.exec_()
+
+        if good:
+            print(f'Pixel {pid} deleted from db')
+            self.delPixelSuccess.emit(str(pid))
+        else:
+            print(query1.lastError().text())
     
     def report_pixels_for_material(self, name):
 
@@ -535,7 +568,6 @@ class Databaser(qtw.QWidget):
             print(f'No pixels for {name}')
             print('\n')
             self.reportPixels.emit(results, 242)
-
         
     def update_average_for_material(self, material, values):
         values = str(values)
@@ -547,10 +579,10 @@ class Databaser(qtw.QWidget):
         query1.bindValue(':material', material)
         good = query1.exec_()
 
-        if good:
-            print(f'average spectra for {material} updated')
-        else:
-            print('query error:', query1.lastError().text())
+        # if good:
+        #     print(f'average spectra for {material} updated')
+        # else:
+        #     print('query error:', query1.lastError().text())
 
     def report_info_for_pid(self, pid):
         ''' given a pixel ID (pid), returns row, column and source image from db '''
@@ -579,18 +611,44 @@ class Databaser(qtw.QWidget):
             self.reportFilepath.emit(f'ERR: no path in database for {id}')
 
 
-    def deletePixel(self, pid):
-        ''' deletes a pixel from db by given PID '''
-        query1 = qts.QSqlQuery(self.db)
-        query1.prepare('DELETE from pixels WHERE pid = :pid')
-        query1.bindValue(':pid', pid)
-        good = query1.exec_()
 
-        if good:
-            print(f'Pixel {pid} deleted from db')
-        else:
-            print(query1.lastError().text())
+    def createMaterialMeansMatrix(self):
+        import numpy as np
+        query = qts.QSqlQuery(self.db)
+        query.prepare('SELECT spectra from materials')
+        query.exec_()
+        i = 0
+        meanslist = []
 
+        def floatify(n):
+            n = float(n)
+            return max(.01, n)
+
+        while query.next():
+            val = query.value(0).strip('[]')
+            valList = val.split(', ')
+            valList = list(map(floatify, valList))
+            sampleList = [valList[i] for i in config.TARGET_BANDS]
+            print('samplelist is:', sampleList)
+            meanslist.append(list(sampleList))
+
+
+        print('reporting means with shape', (len(meanslist), len(meanslist[0])))
+        self.reportMeans.emit(meanslist)
+
+        # Report the mean spectral signatures of each material class as an MxN array where M is the number of material
+        # profiles stored in the db and N is the smallest number of bands recorded in the profile pixels (i.e. if most
+        # of your stored pixels consist of 242 bands, but one of them is only 180 bands, N will be 180 and the
+        # remaning band values will be truncated. This is why it is not recommended to combine pixels from various 
+        # sensors into the same material profile library)
+
+        
+
+            
+       
+
+
+ 
 
     def __init__(self):
         super().__init__()
@@ -681,15 +739,14 @@ class Downloader(qtc.QObject):
     #                 except:
     #                     print(f"Error trying to delete {name}")
 
-        
-
 
 class LogIner(qtc.QObject):
     """ An object to control logging into USGS server """
 
-    log_signal = qtc.pyqtSignal(str)
+    log_signal_true = qtc.pyqtSignal()
+    log_signal_false = qtc.pyqtSignal()
     requestCredentials = qtc.pyqtSignal()
-    
+    loggedIn = False
 
     def __init__(self):
         super().__init__()
@@ -698,7 +755,7 @@ class LogIner(qtc.QObject):
         self.requestCredentials.emit() 
 
     def send_log_signal(self,text):
-        self.log_signal.emit(text)
+        self.log_signal_true.emit()
 
     def login(self):
         """ Login to USGS """
@@ -765,6 +822,7 @@ class LogIner(qtc.QObject):
         # print('response is', response.text)
 
         if 'API key has expired' in response.text:
+            self.log_signal_false.emit()
             print('API key expired. Logging in again...')
             if self.refreshAPIKey():
                 self.sendRequest(self, url, data, apiKey=config.apiKey)
@@ -825,11 +883,15 @@ class LogIner(qtc.QObject):
 
     def login_success(self, apiKeyData):
         config.apiKey = apiKeyData
+        self.loggedIn = True
         print('successfully logged in to USGS!')
+        self.log_signal_true.emit()
     
     def login_failed(self, eCode, eText):
+        self.loggedIn = False
         errorText = eCode +'\n'+ eText
         print(errorText)
+        self.log_signal_false.emit()
 
 
 

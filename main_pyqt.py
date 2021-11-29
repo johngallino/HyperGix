@@ -101,7 +101,9 @@ class MyWindow(qtw.QMainWindow):
         self.setStatusBar(self.status_bar)
         # self.receiveLogInSignal.connect(server.send_log_signal)
         # self.receiveLogInSignal.emit()
-        self.server.log_signal.connect(self.status_bar.showMessage)
+        # self.server.log_signal.connect(self.status_bar.showMessage)
+        self.server.log_signal_true.connect(lambda: self.status_bar.showMessage('Logged into USGS!'))
+        self.server.log_signal_false.connect(lambda: self.status_bar.showMessage('Not logged into USGS'))
         self.mainNotebook.tab1.newCredentials.connect(lambda: self.status_bar.showMessage('USGS Login credentials updated!', 3000))
         self.mainNotebook.tab1.performingSearch.connect(lambda: self.status_bar.showMessage('Performing search...'))
         self.mainNotebook.tab1.loadingResults.connect(lambda: self.status_bar.showMessage('Loading results...'))
@@ -112,7 +114,9 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab1.resultsLoaded.connect(self.status_bar.showMessage)
         self.mainNotebook.tab3.switchToLAN.connect(lambda: self.status_bar.showMessage('Please wait while the file is converted...'), 5000)
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
-        
+        self.databoy.delPixelSuccess.connect(lambda: self.status_bar.showMessage(f'Pixel {str} has been deleted', 5000))
+        self.databoy.raggedArrayAlert.connect(lambda: self.status_bar.showMessage(f'Warning: It is not recommended to assign pixels from different sensors to the same material class', 10000))
+
         # Populating scan list
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_scans)
         self.mainNotebook.tab3.nicknameChosen.connect(self.databoy.add_scan)
@@ -143,13 +147,20 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab2.deleteThisPid.connect(self.databoy.delete_Profile)
         self.databoy.delProfileSuccess.connect(self.mainNotebook.tab2.remove_profile_from_list)
 
+        #Spectral angles calculation
+        self.databoy.reportMeans.connect(self.mainNotebook.tab3.setMeans)
+
         # Working with pixel data
         self.mainNotebook.tab2.pixelViewer.pixelListView.itemClicked.connect(self.databoy.report_info_for_pid)
         self.databoy.reportPixelSource.connect(self.mainNotebook.tab2.pixelViewer.findPixel)
         self.mainNotebook.tab2.reportAverage.connect(self.databoy.update_average_for_material)
+        self.mainNotebook.tab2.pixelViewer.requestPixelDeleted.connect(self.databoy.deletePixel)
+        self.databoy.delPixelSuccess.connect(self.mainNotebook.tab2.pixelViewer.removePixelFromList)
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
+
+        
 
     def updateCredentials(self, username, password):
         self.HGsettings.setValue('username', username)
