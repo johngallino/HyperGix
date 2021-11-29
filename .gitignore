@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.vscode/
 *.py[cod]
 *$py.class
 
@@ -115,3 +116,4 @@ dmypy.json
 *.tmp
 HyperGix Final Report.docx
 ~$perGix Final Report.docx
+*.stackdump
