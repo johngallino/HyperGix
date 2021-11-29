@@ -9,7 +9,6 @@ import spectral.io.envi as envi
 from PyQt5 import QtSql as qts
 from osgeo import gdal
 from os import getcwd
-from functions import unzipIt
 from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
@@ -683,6 +682,21 @@ class Downloader(qtc.QObject):
 
     fileUnzipped = qtc.pyqtSignal(str)
     fileDownloaded = qtc.pyqtSignal(str)
+
+    def unzipIt(zip_file):
+        import zipfile
+        dirname = os.getcwd()
+        zippath = os.path.join(dirname, 'downloads')
+        print(f'Unzipping to {zippath}')
+        try:
+            with zipfile.ZipFile(zip_file) as z:
+                z.extractall(zippath)
+                z.close()
+                print("Extracted all contents of downloaded file")
+            os.remove(zip_file)
+        except Exception as e:
+            print(e)
+
     def __init__(self, id, url):
         super().__init__()
         self.id = id
@@ -699,7 +713,7 @@ class Downloader(qtc.QObject):
         self.fileDownloaded.emit(f'Download of {self.id} finished')
 
         try:
-            unzipIt(self.filename)
+            self.unzipIt(self.filename)
             self.fileUnzipped.emit(self.id[:22])
         except:
             print('Error unzipping file %s.zip' % self.id)
