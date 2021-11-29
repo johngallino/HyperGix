@@ -116,5 +116,5 @@ dmypy.json
 HyperGix Final Report.docx
 ~$perGix Final Report.docx
 *.stackdump
-.vscode/
-designer files/
+/.vscode
+/designer files
