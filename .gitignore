@@ -115,3 +115,4 @@ dmypy.json
 *.tmp
 HyperGix Final Report.docx
 ~$perGix Final Report.docx
+*.stackdump
