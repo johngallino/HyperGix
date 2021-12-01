@@ -620,18 +620,19 @@ class Databaser(qtw.QWidget):
         meanslist = []
 
         def floatify(n):
-            n = float(n)
-            return max(.01, n)
+            n = n.split('.')
+            val = int(float(n[0]))
+            return val
+            
 
         while query.next():
             val = query.value(0).strip('[]')
             valList = val.split(', ')
-            valList = list(map(floatify, valList))
+            valList = list(map(float, valList))
             sampleList = [valList[i] for i in config.TARGET_BANDS]
-            print('samplelist is:', sampleList)
             meanslist.append(list(sampleList))
 
-
+        print('meanslist is:', meanslist)
         print('reporting means with shape', (len(meanslist), len(meanslist[0])))
         self.reportMeans.emit(meanslist)
 
@@ -743,16 +744,6 @@ class Downloader(qtc.QObject):
         fout.write(replacement)
         fout.close()
 
-    # def deleteExtraFiles(self):
-    #     ''' A function to keep only the .L1R and header files and delete everything else'''
-    #     for root, dirs, files in os.walk(DOWNLOAD_PATH, topdown=False):
-    #         for name in files:
-    #             if name[-3:] != 'L1R' and name[-3:] != 'hdr':
-    #                 try:
-    #                     os.remove(name)
-    #                 except:
-    #                     print(f"Error trying to delete {name}")
-
 
 class LogIner(qtc.QObject):
     """ An object to control logging into USGS server """
@@ -799,12 +790,10 @@ class LogIner(qtc.QObject):
         json_data = json.dumps(payload)
         try:
             print('old API key:', config.apiKey)
-            
+            config.apiKey = None
+            self.login()
             response = requests.post(url, json_data)
             print('response is', response.text)
-
-            config.apiKey = self.toDict(response.content)
-
             print('new key:', config.apiKey['data'])
             return True
         except Exception as e:

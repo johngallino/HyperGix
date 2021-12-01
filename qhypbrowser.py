@@ -75,8 +75,6 @@ class ResultBox(qtw.QFrame):
         self.layout.addWidget(self.download_button)
         
 
-
-
 class QHypbrowser(qtw.QWidget):
     """ Class for the USGS Hyperion Search module of the program """
 

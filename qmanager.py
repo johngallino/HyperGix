@@ -136,8 +136,6 @@ class PixelViewer(qtw.QFrame):
         self.v_imageCanvas.draw()
         
 
-        
-        
 
 
 
@@ -216,27 +214,6 @@ class qProfileManager(qtw.QFrame):
             self.plot1.cla()
             self.deletePixelButton.hide()
         
-    def plotAllProfiles(self):
-        """ Plots all profiles on one graph"""
-        self.plot1.cla()
-        # for profile in self.profiles: 
-        #     pixels = profile.pixels
-        #     avgSpectra = []
-        #     for j in range(len(self.TARGET_BANDS)):
-        #         total = 0
-        #         for i in range(len(pixels)):
-        #             total += pixels[i][j]
-        #             avg = round(total/len(pixels))
-        #         avgSpectra.append(avg)
-        #     print(profile.name + '\n'+ str(avgSpectra) + '\n')
-            
-        #     profile.avgSpectra = avgSpectra
-        #     self.plot1.plot(avgSpectra, label=profile.name)
-        # self.plot1.legend()
-        # # self.plot1.set_xticks([0, 1, 2, 3])
-        # self.plot1.set_xlabel('Band')
-        # self.plot1.set_title('All Saved Spectral Profiles')
-        
         self.canvas.draw()
 
     def deletePixel(self):
@@ -307,7 +284,6 @@ class qProfileManager(qtw.QFrame):
         self.delProfileButton = qtw.QPushButton('Delete Profile', clicked=self.deleteProfile)
         self.layout.addWidget(self.delProfileButton, 3, 0)
         
-        self.plotAllButton = qtw.QPushButton("Plot All", clicked=self.plotAllProfiles)
         # self.layout.addWidget(self.plotAllButton, 3, 0)
                
 

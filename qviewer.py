@@ -12,7 +12,7 @@ import shutil
 import numpy as np
 matplotlib.use('Qt5Agg')
 from brokenaxes import brokenaxes
-from config import spectral_angles
+from config import TARGET_BANDS, TARGET_WAVELENGTHS, HYP_WAVELENGTHS
 from osgeo import gdal
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
 from matplotlib.backend_bases import NavigationToolbar2
@@ -48,7 +48,6 @@ class MyImageView(ImageView):
 
     def open_zoom(self, center=None, size=None, fignum=2):
         '''Modified original method to display zoomed view in self NOT a new window '''
-
         from spectral import settings
         import matplotlib.pyplot as plt
         if size is None:
@@ -69,7 +68,6 @@ class MyImageView(ImageView):
             self.pan_to(*center)
             self.axes.add_patch(patches.Rectangle((center[1]-1, center[0]-1), 2, 2, linewidth=1, edgecolor='w', facecolor='none'))
             
-        # return view
 
 class MyMouseHandler(ImageViewMouseHandler):
     def __init__(self, view, broken, *args, **kwargs):
@@ -116,9 +114,10 @@ class MyMouseHandler(ImageViewMouseHandler):
                         self.view.spectrum_plot_fig_id = f.number
                     f.clf()
                     if self.brokenaxes:
-                        s = brokenaxes(xlims=((400, 915), (932, 2500)), hspace=.01, wspace=.04)
-                        x = np.linspace(400, 2500, len(self.filteredBandList))
+                        s = brokenaxes(xlims=((400, 915), (922, 2500)), hspace=.01, wspace=.04)
+                        x = HYP_WAVELENGTHS
                         subimage = self.view.source.read_subimage([r], [c], self.filteredBandList)[0][0]
+                        targetbands = self.view.source.read_subimage([r], [c], TARGET_BANDS)[0][0]
                         s.plot(x, subimage)
                         s.set_xlabel('Wavelength')
                         s.set_ylabel('Reflectance')
@@ -129,6 +128,9 @@ class MyMouseHandler(ImageViewMouseHandler):
                         s.plot([495, 570],[-300, -300], '-g', linewidth=4, markersize=12)
                         s.plot([450, 495],[-300, -300], '-b', linewidth=4, markersize=12)
                         s.plot([760, 1400],[-300, -300], '-k', alpha=.3, linewidth=4, markersize=12)
+
+                        # Target Band overlay
+                        s.plot(TARGET_WAVELENGTHS, targetbands, '.m', markersize = 8)
                         
                         
                     else:
@@ -159,35 +161,6 @@ class NavigationToolbar(NavigationToolbar2QT):
     # only display the buttons we need
     toolitems = [t for t in NavigationToolbar2QT.toolitems if
                  t[0] in ('Home', 'Back', 'Forward', 'Pan', 'Zoom', 'Save')]
-
-    # def __init__(self, canvas, parent, coordinates=True):
-    #     super().__init__(canvas, parent, coordinates=True)
-
-   
-
-class MaterialDialog(qtw.QWidget):
-    """ The popup modal window that appears when a pixel is assigned a class """
-    def __init__(self, materials, parent = None):
-        super(MaterialDialog, self).__init__(parent)
-        self.materials = materials
-        layout = qtw.QFormLayout()
-        
-        self.setLayout(layout)
-        self.setWindowTitle("Assign to Material Profile")
-        self.le = qtw.QLineEdit()
-        self.btn = qtw.QPushButton("Choose from list")
-        self.btn.clicked.connect(self.getItem)
-        layout.addRow(self.btn, self.le)
-        self.show()
-
-    def getItem(self):
-        items = tuple(self.materials)
-		
-        item, ok = qtw.QInputDialog.getItem(self, "Assign this pixel to a material profile", "Stored Profiles", items, 0, False)
-        if ok and item:
-          self.le.setText(item)
-                
-
 
 class qViewer(qtw.QWidget):
     """ A class for the Image Viewer GUI panel """
@@ -334,9 +307,6 @@ class qViewer(qtw.QWidget):
             self.viewSingleBandlayout.hide()
             self.viewNDVIlayout.show()
             self.openHyperionFromList(item, mode)
-            
-
-
 
     def openHyperionFromList(self, item, mode='RGB', r=50, g=27, b=17, sb=50):
         """ Processes and opens a Hyperion image in the viewer """
@@ -429,14 +399,12 @@ class qViewer(qtw.QWidget):
             except Exception as e:
                 print(e)
 
-
     def announcePixel(self):
         r = self.view.lastPixel["row"]
         c = self.view.lastPixel["col"]
         source = self.sourcename
         
         # pop up here
-        # self.matPop = MaterialDialog(self.materials)
         items = tuple(self.materials)
 		
         item, ok = qtw.QInputDialog.getItem(self, "Assign material", "Stored Profiles", items, 0, False)
@@ -577,20 +545,31 @@ class qViewer(qtw.QWidget):
     def calcSpectralAngles(self):
         from config import TARGET_BANDS as tg
         np.set_printoptions(threshold=np.inf)
-        print('shape of means is', self.means.shape)
-        print('shape of img is', self.img.shape)
+        
         imgCube = self.img.read_bands(tg)
+        print('imgCube datatype is', imgCube.dtype)
+        imgCube = imgCube.astype('float64')
+        print('imgCube datatype is now', imgCube.dtype)
         print('imgCube has shape', imgCube.shape)
+        print('shape of means is', self.means.shape)
 
+        from timeit import default_timer as timer
+
+        start = timer()
         angles = spectral_angles(imgCube, self.means)
         clmap = np.argmin(angles, 2)
        
-        # print(clmap)
-        # classes = s.create_training_classes(self.img, clmap)
-        # v = s.imshow(classes=(clmap + 1), interpolation='nearest')
+        with open(f"{self.img.filename[:-4]} - Spectral Classes.txt", "w") as external_file:
+            print(imgCube, file=external_file)
+            external_file.close()
+
+        end = timer()
+        print(f'Took {end - start} to classify pixels using spectral angle calculation\n')
+
+        v = s.imshow(classes=(clmap + 1), interpolation='nearest', source=self.img, colors=s.spy_colors, fignum=3)
+        v.spectrum_plot_fig_id = 4
+        s.save_rgb(f'{self.img.filename[:-4]}-gt.jpg', clmap, colors=s.spy_colors)
         
-
-
             
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -617,7 +596,6 @@ class qViewer(qtw.QWidget):
         self.open_btn = qtw.QPushButton("Import Spectral Scan", clicked=self.importFile)
         self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
         
-
         self.properties_label = qtw.QLabel("File Properties")
         self.properties_text = qtw.QTextBrowser()
         self.properties_text.setFixedWidth(230)
