@@ -1,38 +1,39 @@
-from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
-import spectral as s
-from spectral.algorithms.algorithms import msam, spectral_angles
-from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler,  set_mpl_interactive, ParentViewPanCallback
-from spectral.io import aviris
-import spectral.io.envi as envi
 import os
+from os.path import exists
+import shutil
+
+from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import matplotlib
-import shutil
-import numpy as np
 matplotlib.use('Qt5Agg')
-from brokenaxes import brokenaxes
-from config import TARGET_BANDS, TARGET_WAVELENGTHS, HYP_WAVELENGTHS
+import numpy as np
 from osgeo import gdal
-from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg)
-from matplotlib.backend_bases import NavigationToolbar2
-from os.path import exists
+import spectral as s
+from spectral.algorithms.algorithms import spectral_angles
+from spectral.graphics.spypylab import ImageView, KeyParser, ImageViewMouseHandler
+from spectral.io import aviris
+from spectral.io import envi
+from brokenaxes import brokenaxes
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
 
 from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
+from config import TARGET_BANDS, TARGET_WAVELENGTHS, HYP_WAVELENGTHS
 
 
 gdal.UseExceptions()
 
 
 class MyImageView(ImageView):
+    ''' Subclass of SPy's ImageView customized for HyperGix'''
     def __init__(self, data=None, bands=None, classes=None, source=None, brokenaxes=True,
                  **kwargs):
-                 ImageView.__init__(self, data, bands, classes, source,
-                 **kwargs)
-                 self.broken = brokenaxes
+        ImageView.__init__(self, data, bands, classes, source,
+        **kwargs)
+        self.broken = brokenaxes
 
     lastPixel = {"row": 0, "col": 0}
     
@@ -68,7 +69,6 @@ class MyImageView(ImageView):
             self.pan_to(*center)
             self.axes.add_patch(patches.Rectangle((center[1]-1, center[0]-1), 2, 2, linewidth=1, edgecolor='w', facecolor='none'))
             
-
 class MyMouseHandler(ImageViewMouseHandler):
     def __init__(self, view, broken, *args, **kwargs):
         super(MyMouseHandler, self).__init__(view)
@@ -99,7 +99,6 @@ class MyMouseHandler(ImageViewMouseHandler):
         
         if event.button == 1:
             if event.dblclick and kp.key is None :
-                print(kp.key)
                 if self.view.source is not None:
                     from spectral import settings
                     import matplotlib.pyplot as plt
@@ -248,12 +247,12 @@ class qViewer(qtw.QWidget):
         
         if mode == 'RGB':
             
-            self.view = MyImageView(self.img, (50, 27, 17), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img, brokenaxes=False)
+            self.view = MyImageView(self.img, (32, 21, 13), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img, brokenaxes=False)
             self.view.spectrum_plot_fig_id = 4
             self.view.show(mode='data', fignum=3)
-            self.r_entry.setText('50')
-            self.g_entry.setText('27')
-            self.b_entry.setText('17')
+            self.r_entry.setText('32')
+            self.g_entry.setText('21')
+            self.b_entry.setText('13')
 
         elif mode == 'single':
             self.view = MyImageView(self.img, (50, 50, 50), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img, brokenaxes=False)
@@ -308,10 +307,13 @@ class qViewer(qtw.QWidget):
             self.viewNDVIlayout.show()
             self.openHyperionFromList(item, mode)
 
-    def openHyperionFromList(self, item, mode='RGB', r=50, g=27, b=17, sb=50):
+    def openHyperionFromList(self, item, mode='RGB'):
         """ Processes and opens a Hyperion image in the viewer """
         self.v_fig.clf()
-        
+        r = int(self.r_entry.text())
+        g = int(self.g_entry.text())
+        b = int(self.b_entry.text())
+        sb = self.bandSlider.value()
         # Raster image
         self.item = item.text().split(' ')[0]
         filename = self.item + '.L1R'
@@ -376,7 +378,7 @@ class qViewer(qtw.QWidget):
     def setMeans(self, means):
         means = np.array(means)
         self.means = means
-        print('Means updated')
+        # print('Means updated')
 
     def changeSingleBand(self, s): # receiving s as int
         value = str(s)
@@ -501,34 +503,27 @@ class qViewer(qtw.QWidget):
                     self.nicknameChosen.emit(filename, 'None')
                     self.downloadList.addItem(f'{fileID}')
 
-    def calcPCA(self):
+    def calculate_pca(self):
 
         try:
-            print('\n\nCALCULATING PCA\n=====================\nself.img is', self.img.filename)
+            print('\n\nCALCULATING PCA\n=====================\n ', self.img.filename)
             from timeit import default_timer as timer
 
-            start = timer()
             self.pc = s.principal_components(self.img)
-            end = timer()
-            print(f'PCA calculation took {end - start} seconds\n')
             self.s_fig.clear()
             matrix = s.imshow(self.pc.cov, fignum=4)
 
             self.s_fig.suptitle('Covariance Matrix', fontsize=10) # doesnt work?
 
-            
-
-            print('\nCalculating number of eigenvalues to retain 99% of image variance...\n')
-            start = timer()
+            print('Calculating number of eigenvalues to retain 99% of image variance...\n')
             self.pc_99 = self.pc.reduce(fraction=0.99)
-            end = timer()
 
-            print(len(self.pc_99.eigenvalues), f'eigenvalues -- took {end - start} to calculate\n')
+            print(len(self.pc_99.eigenvalues), f'eigenvalues \n')
 
             self.img_pc = self.pc_99.transform(self.img)
             eigens = len(self.pc_99.eigenvalues)
 
-            print('shape of img_pc is:', self.img_pc.shape)
+            # print('shape of img_pc is:', self.img_pc.shape)
 
             # self.view = s.imshow(self.img_pc[:, :, :len(self.pc_99.eigenvalues)], stretch_all=True, fignum=3)
             self.b2.setChecked(True)
@@ -542,29 +537,18 @@ class qViewer(qtw.QWidget):
             print('No img -',  self.img)
             print(e)
 
-    def calcSpectralAngles(self):
+    def calculate_spectral_angles(self):
         from config import TARGET_BANDS as tg
+
         np.set_printoptions(threshold=np.inf)
-        
         imgCube = self.img.read_bands(tg)
-        print('imgCube datatype is', imgCube.dtype)
         imgCube = imgCube.astype('float64')
-        print('imgCube datatype is now', imgCube.dtype)
-        print('imgCube has shape', imgCube.shape)
-        print('shape of means is', self.means.shape)
-
-        from timeit import default_timer as timer
-
-        start = timer()
         angles = spectral_angles(imgCube, self.means)
         clmap = np.argmin(angles, 2)
-       
+        
         with open(f"{self.img.filename[:-4]} - Spectral Classes.txt", "w") as external_file:
             print(imgCube, file=external_file)
             external_file.close()
-
-        end = timer()
-        print(f'Took {end - start} to classify pixels using spectral angle calculation\n')
 
         v = s.imshow(classes=(clmap + 1), interpolation='nearest', source=self.img, colors=s.spy_colors, fignum=3)
         v.spectrum_plot_fig_id = 4
@@ -611,7 +595,8 @@ class qViewer(qtw.QWidget):
         self.layout.addLayout(self.leftFrame)
 
         if os.path.join(os.getcwd(), 'downloads'):
-            print('downloads folder found')
+            # print('downloads folder found')
+            pass
         else:
             print(os.path.join(os.getcwd(), 'downloads'))
             print(DOWNLOAD_PATH)
@@ -700,17 +685,17 @@ class qViewer(qtw.QWidget):
         self.viewRGBlayout.setLayout(qtw.QHBoxLayout())
         self.viewRGBlayout.layout().addWidget(qtw.QLabel('R:'))
         self.r_entry = qtw.QLineEdit()
-        self.r_entry.setText('50')
+        self.r_entry.setText('32')
         self.r_entry.setFixedWidth(30)
         self.viewRGBlayout.layout().addWidget(self.r_entry)
         self.viewRGBlayout.layout().addWidget(qtw.QLabel('G:'))
         self.g_entry = qtw.QLineEdit()
-        self.g_entry.setText('27')
+        self.g_entry.setText('21')
         self.g_entry.setFixedWidth(30)
         self.viewRGBlayout.layout().addWidget(self.g_entry)
         self.viewRGBlayout.layout().addWidget(qtw.QLabel('B:'))
         self.b_entry = qtw.QLineEdit()
-        self.b_entry.setText('17')
+        self.b_entry.setText('13')
         self.b_entry.setFixedWidth(30)
         self.viewRGBlayout.layout().addWidget(self.b_entry)
         self.viewRGBlayout.layout().addStretch()
@@ -755,7 +740,7 @@ class qViewer(qtw.QWidget):
         n_fig, ax = plt.subplots(figsize=(2, .5), num=10)
         # self.viewNDVIlayout.setStyleSheet("background-color:red;")
         n_fig.subplots_adjust(bottom=.8)
-        print('n_fig number:', n_fig.number)
+        # print('n_fig number:', n_fig.number)
 
         cmap = (matplotlib.colors.ListedColormap(["black", "grey", "red", "yellow", "lawngreen"]))
         bounds = [-1, 0, .25, .5, 1]
@@ -780,8 +765,8 @@ class qViewer(qtw.QWidget):
         self.v_fig = plt.figure(figsize=(1,5), dpi=80, num=3)
         self.s_fig = plt.figure(figsize=(6,5), num=4)
 
-        print('v_fig number:', self.v_fig.number)
-        print('s_fig number:', self.s_fig.number)
+        # print('v_fig number:', self.v_fig.number)
+        # print('s_fig number:', self.s_fig.number)
 
         self.v_imageCanvas = FigureCanvasQTAgg(self.v_fig)
         self.imageHolder.setLayout(qtw.QVBoxLayout())
@@ -824,10 +809,10 @@ class qViewer(qtw.QWidget):
         self.addPixel_btn = qtw.QPushButton("Add Pixel to Profile", clicked=self.announcePixel)
         self.addPixel_btn.setMaximumWidth(200)
 
-        self.PCA_btn = qtw.QPushButton("Calculate PCA", clicked = self.calcPCA)
+        self.PCA_btn = qtw.QPushButton("Calculate PCA", clicked = self.calculate_pca)
         self.PCA_btn.setMaximumWidth(200)
 
-        self.specAngle_btn = qtw.QPushButton("Calculate Classes", clicked = self.calcSpectralAngles)
+        self.specAngle_btn = qtw.QPushButton("Calculate Classes", clicked = self.calculate_spectral_angles)
         self.specAngle_btn.setMaximumWidth(200)
         
         # self.pixelButtons.layout().addWidget(self.clearPlot_btn)

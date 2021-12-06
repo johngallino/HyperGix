@@ -1,17 +1,14 @@
-import config
-import workers as w
 import os
+import sys
 from workers import Databaser, LogIner
-from qmanager import qProfileManager
+from qmanager import QSpectraManager
 from qhypbrowser import QHypbrowser
 from qviewer import qViewer
 
 from PyQt5 import QtWidgets as qtw
-from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
 
-import sys
-
+import config
 
 class ProgressBar(qtw.QProgressBar):
 
@@ -56,8 +53,8 @@ class MyWindow(qtw.QMainWindow):
         self.initUI()
 
         #checking that all files in download folder are in DB
-        for dir in os.listdir(config.HYPERION_SCANS_PATH):
-            self.databoy.add_scan(dir)
+        for directory in os.listdir(config.HYPERION_SCANS_PATH):
+            self.databoy.add_scan(directory)
 
         self.mainNotebook.tab1.nicknameChosenB.connect(self.databoy.add_scan)
 
@@ -88,7 +85,8 @@ class MyWindow(qtw.QMainWindow):
         self.status_bar = qtw.QStatusBar()
 
         # Download progress bar
-        self.dl_pbar = ProgressBar(self, minimum=0, maximum=100, textVisible=False, objectName="RedProgressBar")
+        self.dl_pbar = ProgressBar(self, minimum=0, maximum=100, textVisible=False, 
+            objectName="RedProgressBar")
         self.dl_pbar.setMaximumWidth(165)
         self.status_bar.addPermanentWidget(self.dl_pbar)
 
@@ -115,7 +113,7 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab3.switchToLAN.connect(lambda: self.status_bar.showMessage('Please wait while the file is converted...'), 5000)
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
         self.databoy.delPixelSuccess.connect(lambda: self.status_bar.showMessage(f'Pixel {str} has been deleted', 5000))
-        self.databoy.raggedArrayAlert.connect(lambda: self.status_bar.showMessage(f'Warning: It is not recommended to assign pixels from different sensors to the same material class', 10000))
+        self.databoy.raggedArrayAlert.connect(lambda: self.status_bar.showMessage('Warning: It is not recommended to assign pixels from different sensors to the same material class', 10000))
 
         # Populating scan list
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_scans)
@@ -125,7 +123,7 @@ class MyWindow(qtw.QMainWindow):
         self.databoy.addScanSuccess.connect(self.mainNotebook.tab3.downloadList.addItem)
 
         # Deleting a scan
-        self.mainNotebook.tab3.signal_delete.connect(self.databoy.delete_Scan)
+        self.mainNotebook.tab3.signal_delete.connect(self.databoy.delete_scan)
         self.databoy.delScanSuccess.connect(self.mainNotebook.tab3.remove_scan_from_list)
 
         # Opening external files
@@ -137,11 +135,11 @@ class MyWindow(qtw.QMainWindow):
 
         # Working with materials
         self.mainNotebook.tab2.addMaterial.connect(self.databoy.add_material)
-        self.databoy.matsInDB.connect(self.mainNotebook.tab2.populateMaterials)
+        self.databoy.matsInDB.connect(self.mainNotebook.tab2.populate_materials)
         self.databoy.matsInDB.connect(self.mainNotebook.tab3.populateMaterials)
         self.mainNotebook.tab3.readyForData.connect(self.databoy.report_mats)
         self.mainNotebook.tab2.pixelsPlease.connect(self.databoy.report_pixels_for_material)
-        self.databoy.reportPixels.connect(self.mainNotebook.tab2.plotProfile)
+        self.databoy.reportPixels.connect(self.mainNotebook.tab2.plot_profile)
 
         # Deleting a material profile
         self.mainNotebook.tab2.deleteThisPid.connect(self.databoy.delete_Profile)
@@ -152,22 +150,19 @@ class MyWindow(qtw.QMainWindow):
 
         # Working with pixel data
         self.mainNotebook.tab2.pixelViewer.pixelListView.itemClicked.connect(self.databoy.report_info_for_pid)
-        self.databoy.reportPixelSource.connect(self.mainNotebook.tab2.pixelViewer.findPixel)
+        self.databoy.reportPixelSource.connect(self.mainNotebook.tab2.pixelViewer.find_pixel)
         self.mainNotebook.tab2.reportAverage.connect(self.databoy.update_average_for_material)
-        self.mainNotebook.tab2.pixelViewer.requestPixelDeleted.connect(self.databoy.deletePixel)
-        self.databoy.delPixelSuccess.connect(self.mainNotebook.tab2.pixelViewer.removePixelFromList)
+        self.mainNotebook.tab2.pixelViewer.requestPixelDeleted.connect(self.databoy.delete_pixel)
+        self.databoy.delPixelSuccess.connect(self.mainNotebook.tab2.pixelViewer.remove_pixel_from_list)
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
 
-        
-
-    def updateCredentials(self, username, password):
+    def update_credentials(self, username, password):
         self.HGsettings.setValue('username', username)
         self.HGsettings.setValue('password', password)
-        print('new credentials saved')
+        # print('new credentials saved')
 
-        
 
 class MyNotebook(qtw.QWidget):
 
@@ -178,7 +173,7 @@ class MyNotebook(qtw.QWidget):
         # Initialize tabs
         self.tabs = qtw.QTabWidget()
         self.tab1 = QHypbrowser(self)
-        self.tab2 = qProfileManager()
+        self.tab2 = QSpectraManager()
         self.tab3 = qViewer()
         # self.tab4 = qClassifier()
         self.tabs.resize(300,200)
@@ -199,8 +194,8 @@ class MyNotebook(qtw.QWidget):
 
 def window():
     app = qtw.QApplication(sys.argv)
-    win = MyWindow()
-    win.show()
+    myWindow = MyWindow()
+    myWindow.show()
     sys.exit(app.exec_())
 
 win = window()

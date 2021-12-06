@@ -9,8 +9,6 @@ from PyQt5 import QtWebEngineWidgets as qtwe
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
-from PyQt5 import QtWebEngineWidgets as qtwe
-
 
 
 class ResultBox(qtw.QFrame):
@@ -21,15 +19,15 @@ class ResultBox(qtw.QFrame):
     downloadUnzippedA = qtc.pyqtSignal(str)
     nicknameChosen = qtc.pyqtSignal(str, str)
 
-    def beginDownload(self, id, url):
+    def begin_download(self, scanID, url):
 
         def confirm(i):
             if i.text() == '&Yes':
-                self.downloader = w.Downloader(id, url)
+                self.downloader = w.Downloader(scanID, url)
                 self.downloadThread = qtc.QThread()
                 self.downloader.moveToThread(self.downloadThread)
                 self.downloader.fileDownloaded.connect(self.downloadThread.quit)
-                self.downloadStartedA.connect(self.downloader.downloadHSI)
+                self.downloadStartedA.connect(self.downloader.download_hsi_file)
                 self.downloadStartedA.emit(f'Currently downloading {self.id.text()}...')
                 self.downloader.fileDownloaded.connect(self.downloadFinishedA)
                 self.downloader.fileUnzipped.connect(self.downloadUnzippedA)
@@ -38,9 +36,9 @@ class ResultBox(qtw.QFrame):
                 nickname, ok = qtw.QInputDialog.getText(self, 'Enter a Nickname', 'Would you like to enter a nickname for this file for easier reference?:')
         
                 if ok:
-                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(id[:22], nickname))
+                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(scanID[:22], nickname))
                 else:
-                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(id[:22], 'None'))
+                    self.downloader.fileUnzipped.connect(lambda: self.nicknameChosen.emit(scanID[:22], 'None'))
                 
     
         self.confirmPop = qtw.QMessageBox()
@@ -50,23 +48,19 @@ class ResultBox(qtw.QFrame):
         self.confirmPop.buttonClicked.connect(confirm)
         self.confirmPop.show()
 
-        
-         
-
-
-    def __init__(self, imageLabel, id, caption, count, server):
+    def __init__(self, imageLabel, scanID, caption, count, server):
         super().__init__()
         self.layout = qtw.QVBoxLayout()
         self.setLayout(self.layout)
-        r_filesize, r_url = server.findFilesize(id) # Should be threaded
+        r_filesize, r_url = server.find_file_size(scanID) # Should be threaded
         self.thumbnail = imageLabel
         self.thumbnail.setAlignment(qtc.Qt.AlignCenter)
-        self.id = qtw.QLabel(id)
+        self.id = qtw.QLabel(scanID)
         self.id.setAlignment(qtc.Qt.AlignCenter)
         self.id.setMargin(10)
         self.counterLabel = qtw.QLabel(f'Result {count+1}')
         self.caption = qtw.QLabel(caption)
-        self.download_button = qtw.QPushButton(f'Download {r_filesize} MBs HSI File', clicked=(lambda: self.beginDownload(id, r_url)))
+        self.download_button = qtw.QPushButton(f'Download {r_filesize} MBs HSI File', clicked=(lambda: self.begin_download(scanID, r_url)))
 
         self.layout.addWidget(self.counterLabel)
         self.layout.addWidget(self.thumbnail)
@@ -101,9 +95,9 @@ class QHypbrowser(qtw.QWidget):
 
         self.searchBox = qtw.QLineEdit(self)
         self.searchBox.setText('Manhattan')
-        self.searchBox.returnPressed.connect(self.onSearch)
+        self.searchBox.returnPressed.connect(self.on_search)
         self.searchBox.setFixedWidth(300)
-        self.searchButton = qtw.QPushButton("Search", clicked=self.onSearch)
+        self.searchButton = qtw.QPushButton("Search", clicked=self.on_search)
         self.searchButton.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Fixed)
         self.searchBoxLayout.addWidget(self.searchBox)
         self.searchBoxLayout.addWidget(self.searchButton)
@@ -117,7 +111,7 @@ class QHypbrowser(qtw.QWidget):
         self.resultsBox = qtw.QSpinBox(self)
         self.resultsBox.setValue(3)
         self.resultsBox.setMinimum(1)
-        self.resultsBox.valueChanged.connect(self.updatePageSize)
+        self.resultsBox.valueChanged.connect(self.update_page_size)
         
         self.searchBoxLayout.addWidget(self.resultsLabel)
         self.searchBoxLayout.addWidget(self.resultsBox)
@@ -128,7 +122,7 @@ class QHypbrowser(qtw.QWidget):
         self.cloudBox = qtw.QSpinBox(self)
         self.cloudBox.setValue(60)
         self.cloudBox.setSingleStep(10)
-        self.cloudBox.valueChanged.connect(self.updateCloudThresh)
+        self.cloudBox.valueChanged.connect(self.update_cloud_threshold)
         self.searchBoxLayout.addWidget(self.cloudLabel)
         self.searchBoxLayout.addWidget(self.cloudBox)
         self.searchBoxLayout.addStretch()
@@ -141,7 +135,7 @@ class QHypbrowser(qtw.QWidget):
         self.passwordBox.setText(self.server.password)
         self.passwordBox.setEchoMode(qtw.QLineEdit.EchoMode.Password)
 
-        self.saveBtn = qtw.QPushButton('Save', self, clicked=self.updateCredentials)
+        self.saveBtn = qtw.QPushButton('Save', self, clicked=self.update_login_credentials)
 
         self.searchBoxLayout.addWidget(self.loginLabel)
         self.searchBoxLayout.addWidget(self.loginBox)
@@ -149,10 +143,10 @@ class QHypbrowser(qtw.QWidget):
         self.searchBoxLayout.addWidget(self.passwordBox)
         self.searchBoxLayout.addWidget(self.saveBtn)
         
-        self.prev_btn = qtw.QPushButton("<<", clicked=lambda:self.showResults('back'))
+        self.prev_btn = qtw.QPushButton("<<", clicked=lambda:self.show_results('back'))
         self.prev_btn.hide()
         
-        self.next_btn = qtw.QPushButton(">>", clicked=lambda:self.showResults('next'))
+        self.next_btn = qtw.QPushButton(">>", clicked=lambda:self.show_results('next'))
         self.next_btn.hide()
         
         self.GridLayout = qtw.QGridLayout()
@@ -171,7 +165,7 @@ class QHypbrowser(qtw.QWidget):
             qtg.QFont.PreferQuality
         )
         self.terminalBox.setFont(self.terminalFont)
-        self.terminalBox.setStyleSheet("background-color: #dbf0ff; color: #2d6993;")
+        # self.terminalBox.setStyleSheet("background-color: #dbf0ff; color: #2d6993;")
 
         self.terminalBox.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.MinimumExpanding)
         self.terminalBox.setAcceptRichText(0)
@@ -222,26 +216,21 @@ class QHypbrowser(qtw.QWidget):
         self.r_thumbs = []
         self.qframes = []
 
-    def updateCredentials(self):
+    def update_login_credentials(self):
         username = self.loginBox.text()
         password = self.passwordBox.text()
         self.newCredentials.emit(username, password)
-        
-        
-        
 
-    def updatePageSize(self, int):
+    def update_page_size(self, int):
         self.pageSize = int
         
-
-    def updateCloudThresh(self, int):
+    def update_cloud_threshold(self, int):
         self.cloudThreshold = int
-        
 
-    def onSearch(self):
+    def on_search(self):
         self.counter = 0
         self.performingSearch.emit()
-        self.clearResults()
+        self.clear_results()
         self.terminalBox.clear()
         # Use geocoder to determine place name (very fast)
         g = geocoder.google(self.searchBox.text(), maxRows=5, key="AIzaSyBeL-NSIgeEPx1E1jMMjjKet5FBGWxMnPs")
@@ -251,11 +240,10 @@ class QHypbrowser(qtw.QWidget):
         for result in g:
             self.terminalBox.append(str(result.address) + " " + str(result.latlng))
         # Actual USGS search performed next
-        self.searchLatLon(latlon, result.address)
+        self.search_latlon_coords(latlon, result.address)
      
-        
 
-    def searchLatLon(self, latlonfull, *argv):
+    def search_latlon_coords(self, latlonfull, *argv):
         serviceUrl = "https://m2m.cr.usgs.gov/api/api/json/stable/"
         searchTimer = qtc.QElapsedTimer()
         searchTimer.start() # Will be measuring elapsed time for search
@@ -284,17 +272,17 @@ class QHypbrowser(qtw.QWidget):
                 'sceneFilter' : sceneFilter}
                 
         datasets = 0
-        datasets = self.server.sendRequest(serviceUrl + "scene-search", payload, config.apiKey)
+        datasets = self.server.send_request(serviceUrl + "scene-search", payload, config.apiKey)
         
         obj = json.loads(datasets)
         pretty = json.dumps(obj, indent=3)
         # Print results to terminal
         self.terminalBox.append(pretty)
         
-        self.results = self.server.toDict(datasets)['data']['results']
+        self.results = self.server.to_dict(datasets)['data']['results']
 
         self.loadingResults.emit()
-        self.resultCount = (len(self.server.toDict(datasets)['data']['results']))
+        self.resultCount = (len(self.server.to_dict(datasets)['data']['results']))
         if not self.resultCount:
             print('No results for that search')
 
@@ -304,11 +292,11 @@ class QHypbrowser(qtw.QWidget):
             place = latlonfull
           
         self.resultsLoaded.emit(f"{self.resultCount} results found for '{self.searchBox.text()}'")
-        self.showResults(self.results) 
+        self.show_results(self.results) 
         self.terminalBox.append(f'Found results in {searchTimer.elapsed() /1000} seconds')
         searchTimer.restart()
 
-    def downloadThumbnails(self, results):
+    def download_thumbs(self, results):
         for result in self.results: # SHOULD BE THREADED
             # Processing json and making images for all results
             browse = result['browse']
@@ -318,8 +306,7 @@ class QHypbrowser(qtw.QWidget):
             r_image = qtg.QImage.fromData(r_image_bytes)
             self.r_thumbs.append(r_image)
 
-
-    def printPixmaps(self):
+    def print_pixmaps(self):
         d = qtw.QDialog(self)
         d.setLayout(qtw.QHBoxLayout())
         if len(self.r_thumbs) > 0:
@@ -330,8 +317,7 @@ class QHypbrowser(qtw.QWidget):
                 d.layout().addWidget(label)
             d.show()
 
-
-    def clearResults(self):
+    def clear_results(self):
         # print("clearing the results window")
         for i in reversed(range(self.resultsBoxHolder.count())): 
             try:
@@ -339,17 +325,13 @@ class QHypbrowser(qtw.QWidget):
             except:
                 continue
 
-        
-        
-
-
-    def showResults(self, direction='next'):
+    def show_results(self, direction='next'):
         """ Erase results and display next [pageSize] results """
-        self.clearResults()
+        self.clear_results()
         self.webView.hide()
         self.qframes = []
         self.r_thumbs = []
-        self.downloadThumbnails(self.results)
+        self.download_thumbs(self.results)
 
         if direction == 'back':
             self.counter = self.counter - self.pageSize*2
