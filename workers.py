@@ -83,7 +83,7 @@ class Databaser(qtw.QWidget):
             # print('no material in db matches', material)
             return None
     
-    def add_scan(self, scanID, nickname=None):
+    def add_scan(self, scanID, nickname='None'):
         ''' adds a hyperspectral image to the database '''
         # assume you receive an id like 'EO1H0140312014030110KF'
 
@@ -349,10 +349,10 @@ class Databaser(qtw.QWidget):
             
             if good:
                 print(f'scan {scanID} added successfully to db')
-                if nickname is not None:
+                if nickname != 'None':
                     self.addScanSuccess.emit(f'{scanID} ({nickname})')
                 else:
-                    self.addScanSuccess.emit({scanID})
+                    self.addScanSuccess.emit(scanID)
                 # send signal to add to the list
             else:
                 print('SCAN NOT ADDED TO DATABASE!\n', insertQuery.lastError().text())
@@ -888,8 +888,6 @@ class LogIner(qtc.QObject):
         errorText = eCode +'\n'+ eText
         print(errorText)
         self.log_signal_false.emit()
-
-
 
 
 

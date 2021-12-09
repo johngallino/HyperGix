@@ -100,6 +100,7 @@ class MyWindow(qtw.QMainWindow):
         # self.receiveLogInSignal.connect(server.send_log_signal)
         # self.receiveLogInSignal.emit()
         # self.server.log_signal.connect(self.status_bar.showMessage)
+        self.mainNotebook.tab3.statusMessage.connect(self.status_bar.showMessage)
         self.server.log_signal_true.connect(lambda: self.status_bar.showMessage('Logged into USGS!'))
         self.server.log_signal_false.connect(lambda: self.status_bar.showMessage('Not logged into USGS'))
         self.mainNotebook.tab1.newCredentials.connect(lambda: self.status_bar.showMessage('USGS Login credentials updated!', 3000))

@@ -171,6 +171,7 @@ class qViewer(qtw.QWidget):
     switchToLAN = qtc.pyqtSignal(str)
     switchFinished = qtc.pyqtSignal()
     signal_delete = qtc.pyqtSignal(str)
+    statusMessage = qtc.pyqtSignal(str, int)
     means = np.zeros((6,66))
 
     def deleteScan(self):
@@ -278,7 +279,7 @@ class qViewer(qtw.QWidget):
         self.v_spectraCanvas.draw()
 
     def openFromDownloadList(self, item):
-    
+        
         if item is None:
             item = self.downloadList.item(0)
 
@@ -298,6 +299,7 @@ class qViewer(qtw.QWidget):
             
             self.openHyperionFromList(item, mode)
             self.bandValidator.setTop(self.view.cb_mouse.bandcount)
+            self.bandSlider.setMaximum(self.view.cb_mouse.bandcount)
             
         
         elif self.b3.isChecked():
@@ -352,7 +354,7 @@ class qViewer(qtw.QWidget):
 
         elif mode == 'single':
             sb = self.bandSlider.value()
-            self.view = MyImageView(self.img, (sb, sb, sb), stretch=((.01, .99)), source=self.img)
+            self.view = MyImageView(self.img, bands=tuple([sb]), stretch=((.01, .98)), source=self.img)
             self.view.spectrum_plot_fig_id = 4
             self.view.show(mode='data', fignum=3)
             if self.bandSlider.maximum() < self.view.cb_mouse.bandcount:
@@ -380,14 +382,19 @@ class qViewer(qtw.QWidget):
         self.means = means
         # print('Means updated')
 
-    def changeSingleBand(self, s): # receiving s as int
-        value = str(s)
+    def changeSingleBand(self, sb): # receiving sb as int
+        value = str(sb)
         self.bandLabel.setText(value)
+        # print('mode is', self.mode)
         if self.view:
             try:
-                self.view.set_data(self.img, bands=(s, s, s), stretch=((.01, .99), (.01, .99), (.01, .98)), source=self.img)
+                if self.mode == 'Normal':
+                    self.view = s.imshow(self.img, bands=tuple([sb-1]), stretch=((.01, .98)), fignum=3)
+                if self.mode == 'PCA':
+                    self.view = s.imshow(self.img_pc, bands=tuple([sb-1]), stretch=((.01, .98)), fignum=3)
             except Exception as e:
-                print(e)
+                print('changeBand error', e)
+        
 
     def changeRGBBand(self, r, g, b): #receiving r g b as strings
         print('r:', r, 'g:', g, 'b', b)
@@ -504,56 +511,85 @@ class qViewer(qtw.QWidget):
                     self.downloadList.addItem(f'{fileID}')
 
     def calculate_pca(self):
+        import time
+        tick = time.perf_counter()
+        self.statusMessage.emit('Calculating PCA. Please wait...', None)
+        self.mode = 'PCA'
+        print('\n\nCALCULATING PCA\n=====================\n ', self.img.filename)
+        tic = time.perf_counter()
+        self.pc = s.principal_components(self.img)
+        toc = time.perf_counter()
+        self.s_fig.clear()
+        matrix = s.imshow(self.pc.cov, fignum=4)
+        print(f'Calculating the principal components took {toc-tic:04f} seconds')
+        self.s_fig.suptitle('Covariance Matrix', fontsize=10) # doesnt work?
 
-        try:
-            print('\n\nCALCULATING PCA\n=====================\n ', self.img.filename)
-            from timeit import default_timer as timer
+        # print('Calculating number of eigenvalues to retain 99% of image variance...\n')
+        tic = time.perf_counter()
+        self.pc_99 = self.pc.reduce(fraction=0.99)
+        toc = time.perf_counter()
+        print(f'Calculating the # of eigenvalues to reach 99% took {toc-tic:04f} seconds')
 
-            self.pc = s.principal_components(self.img)
-            self.s_fig.clear()
-            matrix = s.imshow(self.pc.cov, fignum=4)
+        self.img_orig = self.img
+        tic = time.perf_counter()
+        self.img_pc = self.pc_99.transform(self.img)
+        toc = time.perf_counter()
+        print(f'Transforming image took {toc-tic:04f} seconds')
+        print('shape of img_pc is', self.img_pc.shape)
 
-            self.s_fig.suptitle('Covariance Matrix', fontsize=10) # doesnt work?
+        eigens = self.pc_99.eigenvalues.size
+        print(eigens, f'eigenvalues \n')
 
-            print('Calculating number of eigenvalues to retain 99% of image variance...\n')
-            self.pc_99 = self.pc.reduce(fraction=0.99)
+        self.b2.setChecked(True)
+        self.bandSlider.setMaximum(eigens)
+        self.bandSlider.setValue(1)
+        self.bandSlider.setTickInterval(1)
+        self.bandSlider.setSingleStep(1)
+        self.bandValidator.setTop(eigens)
 
-            print(len(self.pc_99.eigenvalues), f'eigenvalues \n')
+        tic = time.perf_counter()
+        self.view.set_data(self.img_pc[:, :, :eigens], bands=(0, 0, 0), stretch=((.01, .98), (.01, .98), (.01, .98)))
+        # self.view = MyImageView(self.img_pc[:, :, :eigens], stretch=((.01, .98)), fignum=3, source=self.img_orig)
+        toc = time.perf_counter()
+        print(f'Rendering PCA view took {toc-tic:04f} seconds')
+        print(f'Whole PCA process took {toc - tick:04f} seconds')
+        self.statusMessage.emit('PCA calculated', 5000)
+        
+        # UNCOMMENT BELOW TO SAVE PCA OUTPUT AUTOMATICALLY (WILL LOCK UP THE PROGRAM WHILE SAVING)
+        # try:
+        #     tic = time.perf_counter()
+        #     for i in range(0, eigens):
+        #         s.save_rgb(f'{self.img_orig.filename[:-4]}-PCA_{i+1}.jpg', self.img_pc, bands=tuple([i]), stretch=((.01, .98)))
+        #     tic = time.perf_counter()
+        #     print(f'Saving PCA finished - {toc-tic:04f} seconds')
+        #     print(f'Whole PCA process took {toc - tick:04f} seconds')
+        #     self.statusMessage.emit('PCA calculated and saved to scan folder.', 5000)
+        # except Exception as e:
+        #     print('saving error - ', e)
 
-            self.img_pc = self.pc_99.transform(self.img)
-            eigens = len(self.pc_99.eigenvalues)
-
-            # print('shape of img_pc is:', self.img_pc.shape)
-
-            # self.view = s.imshow(self.img_pc[:, :, :len(self.pc_99.eigenvalues)], stretch_all=True, fignum=3)
-            self.b2.setChecked(True)
-            self.bandSlider.setMaximum(eigens)
-            self.bandSlider.setValue(1)
-            self.bandSlider.setTickInterval(1)
-            self.bandValidator.setTop(eigens)
-            self.view.set_data(self.img_pc[:, :, :eigens], bands=(1, 1, 1), stretch=((.01, .99), (.01, .99), (.01, .98)))
-
-        except Exception as e:
-            print('No img -',  self.img)
-            print(e)
+        
 
     def calculate_spectral_angles(self):
         from config import TARGET_BANDS as tg
-
+        self.statusMessage.emit('Calculating Spectral Angles. This may take up to 10 minutes. Please wait...', None)
         np.set_printoptions(threshold=np.inf)
         imgCube = self.img.read_bands(tg)
         imgCube = imgCube.astype('float64')
         angles = spectral_angles(imgCube, self.means)
         clmap = np.argmin(angles, 2)
         
-        with open(f"{self.img.filename[:-4]} - Spectral Classes.txt", "w") as external_file:
-            print(imgCube, file=external_file)
-            external_file.close()
+        # with open(f"{self.img.filename[:-4]} - Spectral Classes.txt", "w") as external_file:
+        #     print(imgCube, file=external_file)
+        #     external_file.close()
 
+        self.s_fig.clear()
         v = s.imshow(classes=(clmap + 1), interpolation='nearest', source=self.img, colors=s.spy_colors, fignum=3)
         v.spectrum_plot_fig_id = 4
-        s.save_rgb(f'{self.img.filename[:-4]}-gt.jpg', clmap, colors=s.spy_colors)
+        s.save_rgb(f'{self.img.filename[:-4]}-gt.jpg', clmap+1, colors=s.spy_colors)
+        self.statusMessage.emit('Spectral angle classification and pixel classification complete!', 5000)
         
+    def back_to_normal(self):
+        self.mode = 'Normal'
             
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -565,6 +601,7 @@ class qViewer(qtw.QWidget):
         self.downloads = []
         self.readable_files = {}
         self.scansToAdd = []
+        self.mode = 'Normal'
 
         #Left Frame
         self.leftFrame = qtw.QVBoxLayout()
@@ -576,6 +613,7 @@ class qViewer(qtw.QWidget):
         self.downloadList.setFixedWidth(230)
         self.downloadList.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Expanding)
         self.downloadList.itemDoubleClicked.connect(self.openFromDownloadList)
+        self.downloadList.itemDoubleClicked.connect(self.back_to_normal)
 
         self.open_btn = qtw.QPushButton("Import Spectral Scan", clicked=self.importFile)
         self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
@@ -708,7 +746,7 @@ class qViewer(qtw.QWidget):
         self.viewSingleBandlayout.setLayout(qtw.QHBoxLayout())
         self.bandSlider = qtw.QSlider(qtc.Qt.Horizontal)
         self.bandSlider.setMinimum(1)
-        self.bandSlider.setMaximum(250)
+        self.bandSlider.setMaximum(225)
         self.bandSlider.setSingleStep(1)
         self.bandSlider.setValue(50)
         self.bandSlider.setTickInterval(10)
@@ -717,7 +755,7 @@ class qViewer(qtw.QWidget):
         self.bandLabel = qtw.QLineEdit(str(self.bandSlider.value()))
         self.bandLabel.setFixedWidth(30)
         self.bandLabel.setMaxLength(3)
-        self.bandValidator = qtg.QIntValidator(1, 250)
+        self.bandValidator = qtg.QIntValidator(1, 225)
         self.bandLabel.setValidator(self.bandValidator)
         self.viewSingleBandlayout.layout().addWidget(self.bandLabel)
         self.viewSingleBandlayout.layout().addWidget(self.bandSlider)
@@ -727,8 +765,10 @@ class qViewer(qtw.QWidget):
             v = str(v)
             self.bandLabel.setText(v)
 
+        self.bandSlider.setTracking(False)
         self.bandSlider.valueChanged.connect(labelChange)
-        self.bandSlider.sliderReleased.connect(lambda: self.changeSingleBand(self.bandSlider.value()))
+        self.bandSlider.valueChanged.connect(lambda: self.changeSingleBand(self.bandSlider.value()))
+        # self.bandSlider.sliderReleased.connect(lambda: self.changeSingleBand(self.bandSlider.value()))
         self.bandLabel.editingFinished.connect(lambda: self.bandSlider.setValue(int(self.bandLabel.text())))
 
         # NDVI Color Scale
