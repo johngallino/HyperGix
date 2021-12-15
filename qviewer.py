@@ -19,10 +19,13 @@ from brokenaxes import brokenaxes
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
+from PyQt5.QtCore import QPoint, Qt
 
 from config import HYPERION_SCANS_PATH as DOWNLOAD_PATH
 from config import TARGET_BANDS, TARGET_WAVELENGTHS, HYP_WAVELENGTHS
 
+import warnings
+warnings.filterwarnings("ignore")
 
 gdal.UseExceptions()
 
@@ -172,6 +175,7 @@ class qViewer(qtw.QWidget):
     switchFinished = qtc.pyqtSignal()
     signal_delete = qtc.pyqtSignal(str)
     statusMessage = qtc.pyqtSignal(str, int)
+    request_coords = qtc.pyqtSignal(str)
     means = np.zeros((6,66))
 
     def deleteScan(self):
@@ -230,11 +234,11 @@ class qViewer(qtw.QWidget):
                             self.img = s.open_image(dst_filename)
                             self.switchFinished.emit()
                         except:
-                            qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {filepath}\n{e}')
+                            qtw.QMessageBox.critical(None, 'File Open Error', f'{e}')
                             return
                 
                 except:
-                    qtw.QMessageBox.critical(None, 'File Open Error', f'Could not load file: {filepath}\n{e}')
+                    qtw.QMessageBox.critical(None, 'File Open Error', f'{e}')
                     return
 
         desc = gdal.Info(filepath)
@@ -242,7 +246,10 @@ class qViewer(qtw.QWidget):
 
         self.properties_text.setText(str(self.img).replace('\t', ''))
         self.properties_text.append(desc)
+        self.properties_text.scrollToAnchor('Data Source')
         # would be nice to figure out how to scroll to the top automatically here
+
+        self.coords_label.hide()
 
         self.view.spectrum_plot_fig_id = 4
         
@@ -329,8 +336,6 @@ class qViewer(qtw.QWidget):
 
             self.img = envi.open(h_filepath, filepath)
             
-            
-            
         else:
             # file was imported and path has to be queried from db
             self.requestFilepath.emit(self.item, mode)
@@ -341,7 +346,10 @@ class qViewer(qtw.QWidget):
 
         self.properties_text.setText(str(self.img).replace('\t', ''))
         self.properties_text.append(desc)
-        # would be nice to figure out how to scroll to the top automatically here
+        bar = self.properties_text.verticalScrollBar()
+        bar.setValue(0)
+
+        self.request_coords.emit(filename[:-4])
 
         if mode == 'RGB':
             
@@ -376,6 +384,7 @@ class qViewer(qtw.QWidget):
         
         self.v_imageCanvas.draw()
         self.v_spectraCanvas.draw()
+
 
     def setMeans(self, means):
         means = np.array(means)
@@ -513,7 +522,7 @@ class qViewer(qtw.QWidget):
     def calculate_pca(self):
         import time
         tick = time.perf_counter()
-        self.statusMessage.emit('Calculating PCA. Please wait...', None)
+        self.statusMessage.emit('Calculating PCA. Please wait...', 60000)
         self.mode = 'PCA'
         print('\n\nCALCULATING PCA\n=====================\n ', self.img.filename)
         tic = time.perf_counter()
@@ -527,33 +536,35 @@ class qViewer(qtw.QWidget):
         # print('Calculating number of eigenvalues to retain 99% of image variance...\n')
         tic = time.perf_counter()
         self.pc_99 = self.pc.reduce(fraction=0.99)
+        eigens = self.pc_99.eigenvalues.size
         toc = time.perf_counter()
-        print(f'Calculating the # of eigenvalues to reach 99% took {toc-tic:04f} seconds')
+        print(f'Calculating the # of eigenvalues to reach 99% ({eigens}) took {toc-tic:04f} seconds')
 
         self.img_orig = self.img
         tic = time.perf_counter()
         self.img_pc = self.pc_99.transform(self.img)
         toc = time.perf_counter()
         print(f'Transforming image took {toc-tic:04f} seconds')
-        print('shape of img_pc is', self.img_pc.shape)
-
-        eigens = self.pc_99.eigenvalues.size
-        print(eigens, f'eigenvalues \n')
+        # print('shape of img_pc is', self.img_pc.shape)
 
         self.b2.setChecked(True)
+        tic = time.perf_counter()
         self.bandSlider.setMaximum(eigens)
         self.bandSlider.setValue(1)
         self.bandSlider.setTickInterval(1)
         self.bandSlider.setSingleStep(1)
         self.bandValidator.setTop(eigens)
+        toc = time.perf_counter()
+        print(f'Updating UI took {toc-tic:04f} seconds')
+        
 
         tic = time.perf_counter()
         self.view.set_data(self.img_pc[:, :, :eigens], bands=(0, 0, 0), stretch=((.01, .98), (.01, .98), (.01, .98)))
-        # self.view = MyImageView(self.img_pc[:, :, :eigens], stretch=((.01, .98)), fignum=3, source=self.img_orig)
         toc = time.perf_counter()
         print(f'Rendering PCA view took {toc-tic:04f} seconds')
-        print(f'Whole PCA process took {toc - tick:04f} seconds')
-        self.statusMessage.emit('PCA calculated', 5000)
+        
+        print(f'\nWhole PCA process took {toc - tick:04f} seconds')
+        self.statusMessage.emit(f'PCA calculated - took {toc - tick:04f} seconds', 10000)
         
         # UNCOMMENT BELOW TO SAVE PCA OUTPUT AUTOMATICALLY (WILL LOCK UP THE PROGRAM WHILE SAVING)
         # try:
@@ -571,7 +582,9 @@ class qViewer(qtw.QWidget):
 
     def calculate_spectral_angles(self):
         from config import TARGET_BANDS as tg
-        self.statusMessage.emit('Calculating Spectral Angles. This may take up to 10 minutes. Please wait...', None)
+        import time
+        tick = time.perf_counter()
+        self.statusMessage.emit('Calculating Spectral Angles. Please wait...', None)
         np.set_printoptions(threshold=np.inf)
         imgCube = self.img.read_bands(tg)
         imgCube = imgCube.astype('float64')
@@ -584,12 +597,17 @@ class qViewer(qtw.QWidget):
 
         self.s_fig.clear()
         v = s.imshow(classes=(clmap + 1), interpolation='nearest', source=self.img, colors=s.spy_colors, fignum=3)
+        tock = time.perf_counter()
         v.spectrum_plot_fig_id = 4
         s.save_rgb(f'{self.img.filename[:-4]}-gt.jpg', clmap+1, colors=s.spy_colors)
-        self.statusMessage.emit('Spectral angle classification and pixel classification complete!', 5000)
+        self.statusMessage.emit(f'Spectral angle classification and pixel classification complete! - took {tock-tick:04f} seconds', 5000)
         
     def back_to_normal(self):
         self.mode = 'Normal'
+
+    def update_coords(self, coords):
+        self.coords_label.setText(coords)
+        self.coords_label.show()
             
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -619,7 +637,9 @@ class qViewer(qtw.QWidget):
         self.del_btn = qtw.QPushButton('Remove From Library', clicked=self.deleteScan)
         
         self.properties_label = qtw.QLabel("File Properties")
-        self.properties_text = qtw.QTextBrowser()
+        self.properties_text = qtw.QTextEdit()
+        self.properties_text.setReadOnly(True)
+        self.properties_text.setTextInteractionFlags(qtc.Qt.TextSelectableByMouse)
         self.properties_text.setFixedWidth(230)
         self.properties_text.setFixedHeight(150)
         
@@ -697,6 +717,10 @@ class qViewer(qtw.QWidget):
         # self.subLayout2.setStyleSheet("background-color:blue;")
         self.subLayout2.setLayout(qtw.QVBoxLayout())
 
+        #Coords label
+        self.coords_label = qtw.QLabel('')
+        self.coords_label.setAlignment(qtc.Qt.AlignCenter)
+        self.coords_label.setTextInteractionFlags(qtc.Qt.TextSelectableByMouse)
 
         # View Mode
         self.VMBox = qtw.QWidget()
@@ -833,6 +857,7 @@ class qViewer(qtw.QWidget):
         self.layout.addWidget(self.v_midframe)
         self.subLayout.layout().addWidget(self.v_canvas_nav)
         self.subLayout.layout().addWidget(self.imageHolder)
+        self.subLayout.layout().addWidget(self.coords_label)
         self.subLayout.layout().addWidget(self.VMBox)
         self.subLayout.layout().addWidget(self.viewNDVIlayout)
         self.subLayout.layout().addWidget(self.viewRGBlayout)

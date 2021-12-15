@@ -45,11 +45,6 @@ class MyWindow(qtw.QMainWindow):
         self.HGsettings = qtc.QSettings('John Gallino', 'HyperGix')
         self.login2USGS()
 
-        #USGS Login Credentials
-        # self.HGsettings.setValue('username', 'jgallino')
-        # self.HGsettings.setValue('password', 'SrOP84X4SeuW')
-        # self.HGsettings.sync()
-
         self.initUI()
 
         #checking that all files in download folder are in DB
@@ -112,6 +107,7 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab1.downloadFinishedB.connect(self.dl_pbar.finishDownload)
         self.mainNotebook.tab1.resultsLoaded.connect(self.status_bar.showMessage)
         self.mainNotebook.tab3.switchToLAN.connect(lambda: self.status_bar.showMessage('Please wait while the file is converted...'), 5000)
+        self.mainNotebook.tab3.switchFinished.connect(self.status_bar.clearMessage)
         self.mainNotebook.tab1.downloadUnzippedB.connect(self.mainNotebook.tab3.downloadList.addItem)
         self.databoy.delPixelSuccess.connect(lambda: self.status_bar.showMessage(f'Pixel {str} has been deleted', 5000))
         self.databoy.raggedArrayAlert.connect(lambda: self.status_bar.showMessage('Warning: It is not recommended to assign pixels from different sensors to the same material class', 10000))
@@ -122,6 +118,10 @@ class MyWindow(qtw.QMainWindow):
         self.mainNotebook.tab3.switchToLAN.connect(self.databoy.change_scan_filepath_to_lan)
         self.databoy.scansInDB.connect(self.mainNotebook.tab3.populateScans)
         self.databoy.addScanSuccess.connect(self.mainNotebook.tab3.downloadList.addItem)
+
+        # Coordinates label
+        self.mainNotebook.tab3.request_coords.connect(self.databoy.report_coords_for_fileID)
+        self.databoy.report_coords.connect(self.mainNotebook.tab3.update_coords)
 
         # Deleting a scan
         self.mainNotebook.tab3.signal_delete.connect(self.databoy.delete_scan)

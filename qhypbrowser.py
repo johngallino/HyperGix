@@ -9,6 +9,7 @@ from PyQt5 import QtWebEngineWidgets as qtwe
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtGui as qtg
 from PyQt5 import QtCore as qtc
+from PyQt5.QtCore import Qt
 
 
 class ResultBox(qtw.QFrame):
@@ -152,6 +153,7 @@ class QHypbrowser(qtw.QWidget):
         self.GridLayout = qtw.QGridLayout()
 
         self.splitter = qtw.QSplitter()
+        self.splitter.setHandleWidth(4)
         
         self.layout.addWidget(self.splitter)
         # Code for the terminal
@@ -180,7 +182,7 @@ class QHypbrowser(qtw.QWidget):
         self.resultsWindow = qtw.QFrame(self)
         self.resultsWindow.setFrameShape(qtw.QFrame.Box)
         self.webView = qtwe.QWebEngineView()
-        self.webView.load(qtc.QUrl('http://maps.google.com'))
+        self.webView.load(qtc.QUrl('https://www.google.com/maps/@4.503363,-86.9095463,3z'))
         # self.GridLayout.addWidget(self.resultsWindow, 0, 1, 1, 3)
         self.splitter.addWidget(self.resultsWindow)
         self.splitter.setSizes([250,650])
@@ -197,9 +199,16 @@ class QHypbrowser(qtw.QWidget):
         self.resultsBoxHolder = qtw.QHBoxLayout()
 
         # Results area contents
+        self.no_results = qtw.QLabel('<span style="font-size:large;">Sorry! No results.</span>')
+        self.no_results.setAlignment(qtc.Qt.AlignCenter)
+        self.back_to_map_btn = qtw.QPushButton('Back to Map', clicked=self.back_to_map)
         self.resultsVert = qtw.QVBoxLayout()
         self.resultsWindow.setLayout(self.resultsVert)
         self.resultsVert.addWidget(self.webView)
+        self.resultsVert.addWidget(self.no_results)
+        self.resultsVert.addWidget(self.back_to_map_btn)
+        self.no_results.hide()
+        self.back_to_map_btn.hide()
         self.resultsVert.addLayout(self.resultsBoxHolder)
         self.resultsVert.addLayout(self.nav_layout)
 
@@ -215,6 +224,11 @@ class QHypbrowser(qtw.QWidget):
         self.r_boxes = []
         self.r_thumbs = []
         self.qframes = []
+
+    def back_to_map(self):
+        self.no_results.hide()
+        self.back_to_map_btn.hide()
+        self.webView.show()
 
     def update_login_credentials(self):
         username = self.loginBox.text()
@@ -285,6 +299,12 @@ class QHypbrowser(qtw.QWidget):
         self.resultCount = (len(self.server.to_dict(datasets)['data']['results']))
         if not self.resultCount:
             print('No results for that search')
+            self.no_results.show()
+            self.back_to_map_btn.show()
+        else:
+            self.no_results.hide()
+            self.back_to_map_btn.hide()
+            
 
         if len(argv)>1: #Pulls the place name from the search query for results label
             place = argv[1]

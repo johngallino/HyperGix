@@ -35,6 +35,7 @@ class Databaser(qtw.QWidget):
     delPixelSuccess = qtc.pyqtSignal(str)
     raggedArrayAlert = qtc.pyqtSignal()
     reportMeans = qtc.pyqtSignal(list)
+    report_coords = qtc.pyqtSignal(str)
 
     mats = []
 
@@ -555,7 +556,11 @@ class Databaser(qtw.QWidget):
 
         while query1.next():
             results.append({str(query1.value(0)): query1.value(1)})
-            bandcounts.append(int(query1.value(2)))
+            if query1.value(2) is not None:
+                try:
+                    bandcounts.append(int(query1.value(2)))
+                except:
+                    pass
 
         if results:
             # print(str(len(results)) + f' Pixels for {name}')
@@ -607,8 +612,20 @@ class Databaser(qtw.QWidget):
         if query.next():
             self.reportFilepath.emit(query.value(0), mode)
         else:
-            self.reportFilepath.emit(f'ERR: no path in database for {id}')
+            self.reportFilepath.emit(f'ERR: no path in database for {id}', mode)
 
+    def report_coords_for_fileID(self, id):
+        ''' given a scan id, returns center coordinates from db '''
+
+        query = qts.QSqlQuery(self.db)
+        query.prepare('SELECT c_lat, c_lon from scans where id = :id')
+        query.bindValue(':id', id)
+        query.exec_()
+        
+        if query.next():
+            self.report_coords.emit(f'{query.value(0)}, {query.value(1)}')
+        else:
+            self.report_coords.emit('No coordinates')
 
 
     def create_materials_means_matrix(self):
@@ -760,7 +777,7 @@ class LogIner(qtc.QObject):
         try:
             config.apiKey = self.to_dict(self.send_request(config.serviceUrl + "login", payload))
         except Exception as e:
-            print(e)
+            print('Problem with login', e)
 
         if config.apiKey:
             if config.apiKey['data']:
@@ -774,7 +791,7 @@ class LogIner(qtc.QObject):
             self.login_failed('No valid response.', 'USGS server may be down or you are not online.')
             self.send_log_signal('USGS Server is down or you are not connected to the internet')
 
-    def refresh_api_key(self):
+    def refresh_api_key(self): # Isn't working right currently
         payload = {'username' : self.username, 'password' : self.password}
         url = config.serviceUrl + 'login'
         json_data = json.dumps(payload)
@@ -782,12 +799,13 @@ class LogIner(qtc.QObject):
             print('old API key:', config.apiKey)
             config.apiKey = None
             self.login()
-            response = requests.post(url, json_data)
-            print('response is', response.text)
-            print('new key:', config.apiKey['data'])
+            # response = requests.post(url, json_data)
+            # print('response is', response.text)
+            # response = self.to_dict(response)
+            print('new key:', self.to_dict(config.apiKey)['data'])
             return True
         except Exception as e:
-            response.close()
+            # response.close()
             print('!!!!!', e)
             return False
 
@@ -881,6 +899,7 @@ class LogIner(qtc.QObject):
         config.apiKey = apiKeyData
         self.loggedIn = True
         print('successfully logged in to USGS!')
+        print('API Key:', config.apiKey)
         self.log_signal_true.emit()
     
     def login_failed(self, eCode, eText):
