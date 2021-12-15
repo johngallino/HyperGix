@@ -158,6 +158,13 @@ class MyWindow(qtw.QMainWindow):
         
         #Go signal
         self.mainNotebook.tab3.readyForData.emit()
+        self.mainNotebook.tab3.readyForData.connect(lambda: self.status_bar.showMessage('Welcome to HyperGix!', 10000))
+        
+        if self.server.loggedIn:
+            self.status_bar.showMessage('Logged into USGS!')
+        else:
+            self.status_bar.showMessage('Not logged in. USGS server may be down for maintenance.')
+
 
     def update_credentials(self, username, password):
         self.HGsettings.setValue('username', username)
@@ -190,6 +197,7 @@ class MyNotebook(qtw.QWidget):
         # Add tabs to widget
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)
+
 
    
 

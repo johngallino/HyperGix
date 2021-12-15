@@ -242,6 +242,9 @@ class QHypbrowser(qtw.QWidget):
         self.cloudThreshold = int
 
     def on_search(self):
+        if not self.server.loggedIn:
+            qtw.QMessageBox.critical(None, 'Server Error', 'Could not establish connection to USGS. The server may be down for maintenance or you are not online. Check https://earthexplorer.usgs.gov/')
+            return
         self.counter = 0
         self.performingSearch.emit()
         self.clear_results()
@@ -288,10 +291,16 @@ class QHypbrowser(qtw.QWidget):
         datasets = 0
         datasets = self.server.send_request(serviceUrl + "scene-search", payload, config.apiKey)
         
-        obj = json.loads(datasets)
-        pretty = json.dumps(obj, indent=3)
-        # Print results to terminal
-        self.terminalBox.append(pretty)
+        try:
+            obj = json.loads(datasets)
+            pretty = json.dumps(obj, indent=3)
+
+            # Print results to terminal
+            self.terminalBox.append(pretty)
+        
+        except Exception as e:
+            print('JSON error', e)
+            pass
         
         self.results = self.server.to_dict(datasets)['data']['results']
 
@@ -305,7 +314,6 @@ class QHypbrowser(qtw.QWidget):
             self.no_results.hide()
             self.back_to_map_btn.hide()
             
-
         if len(argv)>1: #Pulls the place name from the search query for results label
             place = argv[1]
         else:

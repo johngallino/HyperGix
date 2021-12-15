@@ -288,7 +288,11 @@ class qViewer(qtw.QWidget):
     def openFromDownloadList(self, item):
         
         if item is None:
-            item = self.downloadList.item(0)
+            try:
+                item = self.downloadList.item(0)
+                self.openHyperionFromList(item, mode='RGB')
+            except:
+                return
 
         if self.b1.isChecked():
             mode = 'RGB'
@@ -296,7 +300,6 @@ class qViewer(qtw.QWidget):
             self.viewSingleBandlayout.hide()
             self.viewNDVIlayout.hide()
             self.openHyperionFromList(item, mode)
-            
 
         elif self.b2.isChecked():
             mode = 'single'
@@ -695,7 +698,6 @@ class qViewer(qtw.QWidget):
         # Mid frame
         self.v_midframe = qtw.QWidget()
         self.v_midframe.setLayout(qtw.QVBoxLayout())
-        
 
         self.v_imageFrame = qtw.QWidget()
         # self.v_imageFrame.setStyleSheet("background-color:#ccc;")
@@ -709,7 +711,6 @@ class qViewer(qtw.QWidget):
         self.subLayout.setMinimumWidth(350)
         self.subLayout.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Expanding)
         self.subLayout.layout().setContentsMargins(0,0,0,0)
-        
         
         self.imageHolder = qtw.QWidget()
 
@@ -739,8 +740,6 @@ class qViewer(qtw.QWidget):
         self.b3.toggled.connect(lambda:self.openFromDownloadList(self.downloadList.currentItem()))
         VMlayout.addWidget(self.b3)
         VMlayout.addStretch()
-
-
 
         # RGB Controls
         self.viewRGBlayout = qtw.QWidget()
@@ -800,7 +799,6 @@ class qViewer(qtw.QWidget):
         self.viewNDVIlayout.setLayout(qtw.QVBoxLayout())
         self.viewNDVIlayout.layout().setContentsMargins(0,0,0,0)
 
-
         n_fig, ax = plt.subplots(figsize=(2, .5), num=10)
         # self.viewNDVIlayout.setStyleSheet("background-color:red;")
         n_fig.subplots_adjust(bottom=.8)
@@ -819,12 +817,9 @@ class qViewer(qtw.QWidget):
             label='NDVI Scale',
         )
         
-        
         self.NDVICanvas = FigureCanvasQTAgg(n_fig) #Creation of the display canvas
         self.NDVICanvas.draw()
         self.viewNDVIlayout.layout().addWidget(self.NDVICanvas)
-
-
        
         self.v_fig = plt.figure(figsize=(1,5), dpi=80, num=3)
         self.s_fig = plt.figure(figsize=(6,5), num=4)

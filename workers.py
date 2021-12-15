@@ -46,7 +46,10 @@ class Databaser(qtw.QWidget):
     def report_mats(self):
         self.mats = self.pull_materials()
         self.matsInDB.emit(self.mats)
-        self.create_materials_means_matrix()
+        try:
+            self.create_materials_means_matrix()
+        except:
+            pass
 
     def pull_scans(self):
         ''' returns a list of scans in the database'''
@@ -655,12 +658,87 @@ class Databaser(qtw.QWidget):
         # is why it is not recommended to combine pixels from various sensors into 
         # the same material profile library)
 
+    def build_Database(self):
+        import sqlite3
+
+
+        # Connecting to sqlite
+        # connection object
+        connection_obj = sqlite3.connect('data.db')
+        
+        # cursor object
+        cursor_obj = connection_obj.cursor()
+        
+        cursor_obj.execute("""CREATE TABLE IF NOT EXISTS "pixels" (
+            "pid"	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+            "source"	INTEGER NOT NULL,
+            "row"	INTEGER NOT NULL,
+            "col"	INTEGER NOT NULL,
+            "material"	INTEGER NOT NULL,
+            "spectra"	TEXT,
+            FOREIGN KEY("source") REFERENCES "scans"("id"),
+            FOREIGN KEY("material") REFERENCES "materials"("mid")
+        );""")
+
+        cursor_obj.execute("""CREATE TABLE IF NOT EXISTS "scans" (
+            "id"	TEXT,
+            "nickname"	TEXT,
+            "filepath"	TEXT NOT NULL UNIQUE,
+            "rows"	INTEGER NOT NULL,
+            "samples"	INTEGER NOT NULL,
+            "bands"	INTEGER NOT NULL,
+            "sensor"	TEXT,
+            "interleave"	TEXT,
+            "date"	TEXT,
+            "time"	TEXT,
+            "ul_lat"	REAL,
+            "ul_lon"	REAL,
+            "ur_lat"	REAL,
+            "ur_lon"	REAL,
+            "ll_lat"	REAL,
+            "ll_lon"	REAL,
+            "lr_lat"	REAL,
+            "lr_lon"	REAL,
+            "c_lat"	REAL,
+            "c_lon"	REAL,
+            PRIMARY KEY("id")
+        );""")
+
+        cursor_obj.execute("""CREATE TABLE IF NOT EXISTS "materials" (
+            "mid"	INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE,
+            "name"	TEXT NOT NULL UNIQUE,
+            "spectra"	TEXT
+        );""")
+
+        cursor_obj.execute("""INSERT INTO materials (name)
+                VALUES
+                ('Water'),
+                ('Healthy Vegetation'),
+                ('Dry Vegetation'),
+                ('Sand'),
+                ('Rock'),
+                ('Clouds'),
+                ('Man-Made Structures'),
+                ('Snow/Ice')
+          ;""")
+
+        connection_obj.commit()
+
+        print("DB built from scratch")
+        
+        # Close the coonection
+        connection_obj.close()
 
     def __init__(self):
         super().__init__()
+
+        if not os.path.exists('data.db'):
+            print('db does not exist')
+            self.build_Database()
+
         self.db = qts.QSqlDatabase.addDatabase('QSQLITE')
         self.db.setDatabaseName('data.db')
-    
+
         if not self.db.open():
             error = self.db.lastError().text()
             qtw.QMessageBox.critical(
@@ -762,6 +840,7 @@ class LogIner(qtc.QObject):
 
     log_signal_true = qtc.pyqtSignal()
     log_signal_false = qtc.pyqtSignal()
+    send_log_signal = qtc.pyqtSignal(str)
     requestCredentials = qtc.pyqtSignal()
     loggedIn = False
 
@@ -786,10 +865,10 @@ class LogIner(qtc.QObject):
                 self.log_signal_true.emit()
             else:
                 self.login_failed(config.apiKey['errorCode'], config.apiKey['errorMessage'])
-                self.send_log_signal(f"USGS Login failed!\t{config.apiKey['errorMessage']}")
+                # self.send_log_signal(f"USGS Login failed!\t{config.apiKey['errorMessage']}")
         else:
             self.login_failed('No valid response.', 'USGS server may be down or you are not online.')
-            self.send_log_signal('USGS Server is down or you are not connected to the internet')
+            # self.send_log_signal('USGS Server is down or you are not connected to the internet')
 
     def refresh_api_key(self): # Isn't working right currently
         payload = {'username' : self.username, 'password' : self.password}
@@ -799,10 +878,7 @@ class LogIner(qtc.QObject):
             print('old API key:', config.apiKey)
             config.apiKey = None
             self.login()
-            # response = requests.post(url, json_data)
-            # print('response is', response.text)
-            # response = self.to_dict(response)
-            print('new key:', self.to_dict(config.apiKey)['data'])
+            print('new API key:', config.apiKey)
             return True
         except Exception as e:
             # response.close()
