@@ -29,6 +29,14 @@ warnings.filterwarnings("ignore")
 
 gdal.UseExceptions()
 
+# if os.name == "nt":
+#     matplotlib.rcParams.update({'font.size': 10})
+if os.name =='posix':
+    font = {'family' : 'Arial',
+        'size'   : 8}
+
+matplotlib.rc('font', **font)
+
 
 class MyImageView(ImageView):
     ''' Subclass of SPy's ImageView customized for HyperGix'''
@@ -837,7 +845,7 @@ class qViewer(qtw.QWidget):
         self.ax1 = plt.Axes(self.v_fig, [0., 0., 1., 1.])
         self.v_fig.add_axes(self.ax1)
         self.ax1.set_axis_off()
-        self.s_fig.suptitle('Pixel Spectra', fontsize=10)
+        self.s_fig.suptitle('Pixel Spectra')
         # self.ax2 = plt.Axes(self.s_fig, [400, 2500, 0, 5000])
         # self.s_fig.add_axes(self.ax2)
         sax = self.s_fig.gca()

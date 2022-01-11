@@ -36,7 +36,7 @@ class MyWindow(qtw.QMainWindow):
     
     def __init__(self):
         super(MyWindow, self).__init__()
-        self.setGeometry(100, 100, 1300, 900) #top, left, width, height
+        self.setGeometry(100, 100, 1300, 850) #top, left, width, height
         self.version = '1.0'
         self.setWindowTitle('HyperGix Hyperspectral Software ' + self.version)
 
@@ -46,6 +46,9 @@ class MyWindow(qtw.QMainWindow):
         self.login2USGS()
 
         self.initUI()
+
+        if not os.path.isdir(config.HYPERION_SCANS_PATH):
+            os.mkdir(config.HYPERION_SCANS_PATH)
 
         #checking that all files in download folder are in DB
         for directory in os.listdir(config.HYPERION_SCANS_PATH):

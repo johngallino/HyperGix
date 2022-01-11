@@ -23,6 +23,12 @@ LAN_PATH = os.path.join(os.getcwd(), 'downloads')
 PROFILES_PATH = os.path.join(os.getcwd(), 'profiles.bin')
 NICKNAMES_PATH = os.path.join(os.getcwd(), 'nicknames.bin')
 
+if os.name == "nt":
+    matplotlib.rcParams.update({'font.size': 10})
+elif os.name =='posix':
+    matplotlib.rcParams.update({'font.size': 6})
+
+
 class PixelViewer(qtw.QFrame):
     ''' A class for the small PixelViewer submodule within Spectra Manager module '''
     import spectral as s
