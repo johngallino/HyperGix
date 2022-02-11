@@ -75,7 +75,7 @@ Alternatively, to run HyperGix using Conda and the included yml files, first clo
 
 
 ## Project Status
-Project is:  _in progress_ 
+Project is:  _no_longer_being_worked_on_ 
 
 <!-- ## Room for Improvement
 Include areas you believe need improvement / could be improved. Also add TODOs for future development.
@@ -90,7 +90,6 @@ To do:
 
 
 ## Acknowledgements
-Give credit here.
 - This project was inspired in part by [MultiSpec](github.com/larrybiehl/MultiSpec)
 - This project was created under guidance from [Dr. Stefan Robila](https://www.montclair.edu/profilepages/view_profile.php?username=robilas) of Montclair State University
 
