@@ -34,6 +34,9 @@ gdal.UseExceptions()
 if os.name =='posix':
     font = {'family' : 'Arial',
         'size'   : 8}
+else:
+    font = {'family' : 'Arial',
+        'size'   : 10}
 
 matplotlib.rc('font', **font)
 
