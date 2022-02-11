@@ -91,9 +91,8 @@ To do:
 
 ## Acknowledgements
 Give credit here.
-- This project was inspired by...
-- This project was based on [this tutorial](https://www.example.com).
-- Many thanks to...
+- This project was inspired in part by [MultiSpec](github.com/larrybiehl/MultiSpec)
+- This project was created under guidance from [Dr. Stefan Robila](https://www.montclair.edu/profilepages/view_profile.php?username=robilas) of Montclair State University
 
 
 ## Contact
